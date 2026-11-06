@@ -12,10 +12,10 @@ and switching between environments.
 
 | Type | Name | Purpose |
 |---|---|---|
-| Command | `/unizo-ctem:unizo-ctem-setup [<environments.json>]` | Guided setup: pick an environment from your environments file, sign in to the gateway (SSO) and to the `unizo-ctem-cloud` MCP server |
+| Command | `/unizo-ctem:unizo-ctem-setup [<environments.json>]` | Guided setup: pick an environment from your environments file, then one SSO sign-in for both the gateway and the `unizo-ctem-cloud` MCP server |
 | Command | `/unizo-ctem:unizo-ctem-env` | List environments (demo, staging, prod, ...) and switch between them |
 | Command | `/unizo-ctem:unizo-ctem-hello` | Check that the plugin is installed and list what it provides |
-| Command | `/unizo-ctem:queue` | Work your review queue (W1): Investigations awaiting review, mine or unclaimed, `crown`, `kev` |
+| Command | `/unizo-ctem:unizo-ctem-queue` | Work your review queue (W1): Investigations awaiting review, mine or unclaimed, `crown`, `kev` |
 | Skill | `unizo-ctem-basics` | Explains CTEM concepts and the five-stage cycle |
 | Skill | `unizo-ctem-review-queue` | W1 end to end: queue → claim → review plans → `preview_commit` → `commit_actions`, confirming every write |
 | Hook | `unizo_ctem_guard` | On `unizo-ctem-cloud` tools: blocks `move_ticket` / `set_jira_assignee`, refuses `commit_actions` without a recent matching `preview_commit`, asks before every write, audits writes to `~/.config/unizo-ctem-mcp/audit.jsonl` |
@@ -46,10 +46,12 @@ until the plugin is set up). Run it (optionally with the path to the
 environments.json your administrator gave you) and it will:
 
 1. ask for the path to your `environments.json` and let you pick an environment from it;
-2. ask you to restart Claude Code so the environment loads. You'll see a reminder when Claude Code starts again;
-3. on the second run, sign you in to the CTEM gateway through SSO, then to the remote `unizo-ctem-cloud` MCP server.
+2. sign you in once through SSO. The same sign-in covers the CTEM gateway and the remote `unizo-ctem-cloud` MCP
+   server (the remote server gets the gateway's token through its `headersHelper`), so there's no second sign-in;
+3. ask you to restart Claude Code so the environment loads (`claude` or `claude --continue`). Your first message after
+   the restart finishes setup by checking that both servers are connected. You don't need to run the command again.
 
-The reminder keeps appearing at startup until setup finishes. It comes back when you switch to another environment.
+This continues at every startup until setup finishes. It comes back when you switch to another environment.
 (Claude Code has no install-time hook, so the flow starts at the first session after install, not inside
 `/plugin install` itself.)
 

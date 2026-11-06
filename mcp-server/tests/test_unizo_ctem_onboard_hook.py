@@ -42,12 +42,15 @@ def test_env_var_gateway_without_environment_is_silent() -> None:
     assert run({"UNIZO_CTEM_API_URL": "https://ctem.acme.com"}) is None
 
 
-def test_environment_picked_but_not_signed_in_asks_to_finish(isolated_config: Path) -> None:
+def test_environment_picked_but_setup_unfinished_finishes_it(isolated_config: Path) -> None:
     write_state(isolated_config, {"name": "staging"})
     out = run()
     assert out is not None
-    assert '"staging"' in out["systemMessage"] and "finish" in out["systemMessage"]
-    assert "unizo-ctem-cloud" in out["hookSpecificOutput"]["additionalContext"]
+    assert '"staging"' in out["systemMessage"] and "first message" in out["systemMessage"]
+    context = out["hookSpecificOutput"]["additionalContext"]
+    assert "unizo-ctem:unizo-ctem-setup" in context
+    assert "without asking" in context
+    assert "One SSO sign-in covers both" in context
 
 
 def test_setup_complete_is_silent(isolated_config: Path) -> None:

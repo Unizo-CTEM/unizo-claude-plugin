@@ -2,7 +2,7 @@
 
 **Date:** 6 November 2026
 **Based on:** *Unizo MCP Server — Tool Catalog* (working draft, revised 29 October 2026, Single Pane Draft 12) and the live `unizo-ctem-cloud` server on dev52.
-**Status:** In progress. W1 is built (6 November 2026): skill `unizo-ctem-review-queue`, command `/unizo-ctem:queue`, and the `unizo_ctem_guard` hook, which covers hooks 1–4 of section 4.4 for every `unizo-ctem-cloud` tool. Everything else is still a proposal.
+**Status:** In progress. W1 is built (6 November 2026): skill `unizo-ctem-review-queue`, command `/unizo-ctem:unizo-ctem-queue`, and the `unizo_ctem_guard` hook, which covers hooks 1–4 of section 4.4 for every `unizo-ctem-cloud` tool. Everything else is still a proposal.
 
 **Found while building W1 (add to section 3):** `find_exposures(kev_listed=true, crown_jewel=true)` returns 0 results on dev52, even though KEV-listed rows carry `crownJewel: true`. The skill works around it by filtering on the row field.
 
@@ -106,7 +106,7 @@ Also update `unizo-ctem-basics` to map the five CTEM stages to Unizo's objects (
 
 | Command | Starts |
 |---|---|
-| `/unizo-ctem:queue` | `unizo-ctem-review-queue` |
+| `/unizo-ctem:unizo-ctem-queue` | `unizo-ctem-review-queue` |
 | `/unizo-ctem:cve <id>` | `unizo-ctem-cve-response` |
 | `/unizo-ctem:weekly-review` | `unizo-ctem-weekly-vuln-review` |
 | `/unizo-ctem:brief <business unit>` | `unizo-ctem-bu-brief` |

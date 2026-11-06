@@ -7,6 +7,8 @@ should see and recover from. Never print to stdout: stdout carries the MCP proto
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import sys
 from collections.abc import AsyncIterator
@@ -175,19 +177,43 @@ async def _cli(command: str) -> int:
         await auth.aclose()
 
 
+async def _headers() -> dict[str, str]:
+    """The ``Authorization`` header for the remote ``unizo-ctem-cloud`` server, from the gateway's SSO token cache.
+
+    Claude Code runs ``unizo-ctem-mcp headers`` as that server's ``headersHelper``, so one SSO sign-in covers both
+    servers. Not signed in, SSO not configured, or any error: no headers, and Claude Code falls back to its own
+    OAuth sign-in for the server."""
+    settings = Settings.from_env()
+    if settings.oidc is None or not settings.oidc.enabled:
+        return {}
+    auth = OidcAuth(settings.oidc)
+    try:
+        token = await asyncio.wait_for(auth.bearer_token(), timeout=8)
+    except Exception:  # noqa: BLE001 - a helper failure must not break the server connection
+        return {}
+    finally:
+        await auth.aclose()
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
 def main() -> None:
     args = sys.argv[1:]
+    if args == ["headers"]:
+        try:
+            headers = asyncio.run(_headers())
+        except Exception:  # noqa: BLE001
+            headers = {}
+        print(json.dumps(headers))
+        raise SystemExit(0)
     if args and args[0] == "env":
         from unizo_ctem_mcp.environments import cli
 
         raise SystemExit(cli(args[1:]))
     if args and args[0] in ("login", "logout", "whoami"):
-        import asyncio
-
         raise SystemExit(asyncio.run(_cli(args[0])))
     if args:
         print(
-            "usage: unizo-ctem-mcp [login | logout | whoami | env ...]   (no arguments: run the MCP server on stdio)",
+            "usage: unizo-ctem-mcp [login | logout | whoami | headers | env ...]   (no arguments: run the MCP server on stdio)",
             file=sys.stderr,
         )
         raise SystemExit(2)

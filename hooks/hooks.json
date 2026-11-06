@@ -1,9 +1,9 @@
 {
-  "description": "Onboarding at session start: points to /unizo-ctem:unizo-ctem-setup until an environment is picked and both sign-ins are done. CTEM guard: blocks ticket moves, requires preview_commit before commit_actions, asks before every unizo-ctem-cloud write, and audits writes to ~/.config/unizo-ctem-mcp/audit.jsonl",
+  "description": "Onboarding at session start: points to /unizo-ctem:unizo-ctem-setup until an environment is picked, then starts both sign-ins automatically after the restart. CTEM guard: blocks ticket moves, requires preview_commit before commit_actions, asks before every unizo-ctem-cloud write, and audits writes to ~/.config/unizo-ctem-mcp/audit.jsonl",
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup",
+        "matcher": "startup|resume",
         "hooks": [
           {
             "type": "command",

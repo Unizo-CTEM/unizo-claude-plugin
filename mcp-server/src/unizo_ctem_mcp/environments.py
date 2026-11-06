@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -62,8 +63,9 @@ class RemoteMcp:
     callback_port: int | None = None
     scopes: str = ""
 
-    def server_config(self) -> dict[str, Any]:
-        """The JSON for ``claude mcp add-json``."""
+    def server_config(self, headers_helper: str = "") -> dict[str, Any]:
+        """The JSON for ``claude mcp add-json``. ``headers_helper`` is a command that prints the request headers
+        (here: the gateway's SSO token), so the server needs no second sign-in; ``oauth`` stays as the fallback."""
         oauth: dict[str, Any] = {}
         if self.client_id:
             oauth["clientId"] = self.client_id
@@ -72,6 +74,8 @@ class RemoteMcp:
         if self.scopes:
             oauth["scopes"] = self.scopes
         config: dict[str, Any] = {"type": "http", "url": self.url}
+        if headers_helper:
+            config["headersHelper"] = headers_helper
         if oauth:
             config["oauth"] = oauth
         return config
@@ -285,6 +289,18 @@ def _remote_registered(run: Runner) -> bool:
     return result.returncode == 0 and "Scope: User" in result.stdout
 
 
+MCP_SERVER_DIR = Path(__file__).resolve().parents[2]
+"""The ``mcp-server`` project this package runs from (inside the installed plugin)."""
+
+
+def _headers_helper(env: Environment) -> str:
+    """The ``headersHelper`` command that hands the remote server the gateway's SSO token, or ``""`` when the
+    environment has no SSO (then the remote server signs in with its own OAuth)."""
+    if not (env.settings.get("sso_issuer") and env.settings.get("sso_client_id")):
+        return ""
+    return f"uv run --quiet --project {shlex.quote(str(MCP_SERVER_DIR))} unizo-ctem-mcp headers"
+
+
 def use(
     name: str,
     *,
@@ -313,7 +329,7 @@ def use(
         )
 
     previous_remote = (state or {}).get("remote")
-    new_remote = env.remote.server_config() if env.remote else None
+    new_remote = env.remote.server_config(_headers_helper(env)) if env.remote else None
     if exists:
         if previous_remote != new_remote:
             # Claude Code keeps a server's OAuth client registration and tokens by name, and a cached registration

@@ -7,7 +7,10 @@ installing the plugin is where onboarding starts. It has three outcomes:
 * nothing set up (no active environment, no ``UNIZO_CTEM_API_URL`` in the environment): no message is shown, but
   Claude is told to offer ``/unizo-ctem:unizo-ctem-setup``, which asks for their environments.json, switches to an environment, and signs in.
 * an environment is active but setup hasn't finished (the switch needs a restart, so setup always spans two sessions):
-  ask the user to run ``/unizo-ctem:unizo-ctem-setup`` again to sign in to the gateway and to ``unizo-ctem-cloud``.
+  tell the user setup finishes with their first message, and tell Claude to run ``/unizo-ctem:unizo-ctem-setup``
+  in its first reply without asking. The single SSO sign-in normally happened before the restart and also covers
+  ``unizo-ctem-cloud``, so this checks the connection and signs in only if needed. A hook can't start a turn on
+  its own, so the user's first message is what kicks it off.
 * setup finished (``unizo-ctem-mcp env setup-done``), or ``UNIZO_CTEM_API_URL`` sets a gateway with no environment:
   stay silent.
 
@@ -64,10 +67,14 @@ def main() -> None:
         return
     name = state["name"]
     emit(
-        f'Unizo CTEM: environment "{name}" is active. Run /unizo-ctem:unizo-ctem-setup to finish signing in.',
-        f'The Unizo CTEM environment "{name}" was selected in an earlier session, but setup isn\'t finished: the user '
-        "still has to sign in to the CTEM gateway (SSO) and to the remote unizo-ctem-cloud MCP server. In your first "
-        "reply, offer to run /unizo-ctem:unizo-ctem-setup to finish both sign-ins.",
+        f'Unizo CTEM: environment "{name}" is active. Setup finishes with your first message.',
+        f'The Unizo CTEM environment "{name}" was selected in an earlier session and Claude Code has since restarted, '
+        "but setup isn't finished. In your first reply, whatever the user says, finish it right away without asking "
+        "first: invoke the unizo-ctem:unizo-ctem-setup skill with the Skill tool (no arguments) and follow it from "
+        "step 0. It skips the environment step and checks the connection. One SSO sign-in covers both the CTEM "
+        "gateway and the remote unizo-ctem-cloud server; sign in (unizo_ctem_login) only if the gateway isn't signed "
+        "in, and use mcp__unizo-ctem-cloud__authenticate only as the last resort the command describes. Once setup "
+        "is done, get back to what the user asked.",
     )
 
 

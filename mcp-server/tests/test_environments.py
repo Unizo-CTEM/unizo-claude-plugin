@@ -116,6 +116,13 @@ def test_remote_server_config_for_claude() -> None:
     assert envs.RemoteMcp("https://x/mcp").server_config() == {"type": "http", "url": "https://x/mcp"}
 
 
+def test_remote_without_gateway_sso_gets_no_headers_helper(tmp_path: Path, isolated_config: Path) -> None:
+    path = write(tmp_path / "e.json", {"ci": {"api_url": "https://ctem.acme.com", "remote_mcp": {"url": "https://x/mcp"}}})
+    claude = FakeClaude()
+    envs.use("ci", file=path, run=claude, out=lambda _: None)
+    assert "headersHelper" not in claude.servers["unizo-ctem-cloud"]
+
+
 # ── The active environment replaces the UNIZO_CTEM_* variables ──
 
 
@@ -193,6 +200,7 @@ def test_use_registers_the_remote_server_with_its_client_id(user_file: Path) -> 
     assert claude.servers["unizo-ctem-cloud"] == {
         "type": "http",
         "url": "https://ctem-staging.acme.com/mcp",
+        "headersHelper": f"uv run --quiet --project {envs.MCP_SERVER_DIR} unizo-ctem-mcp headers",
         "oauth": {"clientId": "mcp-staging", "callbackPort": 3118},
     }
     assert ["claude", "mcp", "add-json", "--scope", "user", "unizo-ctem-cloud"] == claude.calls[-1][:6]
