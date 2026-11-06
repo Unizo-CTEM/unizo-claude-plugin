@@ -1,5 +1,5 @@
 ---
-name: ctem-basics
+name: unizo-ctem-basics
 description: Explain Continuous Threat Exposure Management (CTEM) concepts and the five-stage cycle (scoping, discovery, prioritization, validation, mobilization). Use when the user asks what CTEM is, how a stage works, or how a finding maps to the CTEM cycle.
 ---
 

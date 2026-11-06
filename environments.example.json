@@ -1,0 +1,33 @@
+{
+  "environments": {
+    "staging": {
+      "description": "Acme staging (GCP)",
+      "api_url": "https://ctem-staging.acme.com",
+      "sso_issuer": "https://acme.okta.com/oauth2/default",
+      "sso_client_id": "0oa-staging-client",
+      "sso_audience": "api://ctem",
+      "remote_mcp": {
+        "url": "https://ctem-staging.acme.com/mcp",
+        "client_id": "ctem-mcp-staging",
+        "callback_port": 3118
+      }
+    },
+    "prod": {
+      "description": "Acme production (AWS)",
+      "api_url": "https://ctem.acme.com",
+      "sso_issuer": "https://login.microsoftonline.com/<tenant-id>/v2.0",
+      "sso_client_id": "11111111-2222-3333-4444-555555555555",
+      "remote_mcp": {
+        "url": "https://ctem.acme.com/mcp",
+        "client_id": "ctem-mcp-prod",
+        "scopes": "openid profile email"
+      }
+    },
+    "ci": {
+      "description": "Service account against staging; the API token is set with /plugin configure",
+      "api_url": "https://ctem-staging.acme.com",
+      "use_plugin_secrets": true,
+      "remote_mcp": null
+    }
+  }
+}

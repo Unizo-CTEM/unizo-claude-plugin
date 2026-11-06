@@ -1,0 +1,24 @@
+{
+  "environments": {
+    "demo": {
+      "description": "Unizo hosted demo",
+      "api_url": "https://demo.unizo.ai",
+      "sso_issuer": "https://demo.unizo.ai/realms/ctem",
+      "sso_client_id": "dW5pem8tbWNwLWNsaWVudA==",
+      "remote_mcp": {
+        "url": "https://demo.unizo.ai/mcp",
+        "client_id": "dW5pem8tbWNwLWNsaWVudA=="
+      }
+    },
+    "dev52": {
+      "description": "Unizo hosted Dev52 environment",
+      "api_url": "https://dev52.unizo.ai",
+      "sso_issuer": "https://dev52.unizo.ai/realms/ctem",
+      "sso_client_id": "Q2xhdWRlIE9wZW5JRCBDb25uZWN0",
+      "remote_mcp": {
+        "url": "https://dev52.unizo.ai/mcp",
+        "client_id": "Q2xhdWRlIE9wZW5JRCBDb25uZWN0"
+      }
+    }
+  }
+}

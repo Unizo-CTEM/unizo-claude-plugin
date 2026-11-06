@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "unizo-ctem": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--quiet",
+        "--project",
+        "${CLAUDE_PLUGIN_ROOT}/mcp-server",
+        "unizo-ctem-mcp"
+      ],
+      "env": {
+        "UNIZO_CTEM_API_URL": "${user_config.api_url}",
+        "UNIZO_CTEM_API_TOKEN": "${user_config.api_token}",
+        "UNIZO_CTEM_OIDC_ISSUER": "${user_config.sso_issuer}",
+        "UNIZO_CTEM_OIDC_CLIENT_ID": "${user_config.sso_client_id}",
+        "UNIZO_CTEM_OIDC_CLIENT_SECRET": "${user_config.sso_client_secret}",
+        "UNIZO_CTEM_OIDC_SCOPES": "${user_config.sso_scopes}",
+        "UNIZO_CTEM_OIDC_AUDIENCE": "${user_config.sso_audience}",
+        "UNIZO_CTEM_OIDC_TOKEN_TYPE": "${user_config.sso_token_type}",
+        "UNIZO_CTEM_OIDC_REDIRECT_PORT": "${user_config.sso_redirect_port}",
+        "UNIZO_CTEM_CONFIGURE_HINT": "Run /unizo-ctem:unizo-ctem-env to pick an environment, or /plugin configure unizo-ctem@unizo-ctem",
+        "UNIZO_CTEM_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}"
+      }
+    }
+  }
+}

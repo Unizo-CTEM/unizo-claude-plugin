@@ -8,7 +8,7 @@
   },
   "plugins": [
     {
-      "name": "ctem",
+      "name": "unizo-ctem",
       "source": "./",
       "description": "Unizo CTEM toolkit for Claude Code",
       "version": "0.1.0",
