@@ -12,7 +12,7 @@ and switching between environments.
 
 | Type | Name | Purpose |
 |---|---|---|
-| Command | `/unizo-ctem:unizo-ctem-setup` | Check the connection to your CTEM deployment and walk through setup or SSO sign-in |
+| Command | `/unizo-ctem:unizo-ctem-setup [<environments.json>]` | Guided setup: pick an environment from your environments file, sign in to the gateway (SSO) and to the `unizo-ctem-cloud` MCP server |
 | Command | `/unizo-ctem:unizo-ctem-env` | List environments (demo, staging, prod, ...) and switch between them |
 | Command | `/unizo-ctem:unizo-ctem-hello` | Check that the plugin is installed and list what it provides |
 | Command | `/unizo-ctem:queue` | Work your review queue (W1): Investigations awaiting review, mine or unclaimed, `crown`, `kev` |
@@ -37,7 +37,23 @@ This repo is both a plugin and a single-plugin marketplace.
 
 ## Connect to your CTEM deployment
 
-Each organization runs its own CTEM deployment on GCP or AWS. Point the plugin at yours:
+Each organization runs its own CTEM deployment on GCP or AWS.
+
+### Guided setup (recommended)
+
+After installing, restart Claude Code. The first session greets you with
+*"Unizo CTEM: plugin installed. Run /unizo-ctem:unizo-ctem-setup"*. Run it (optionally with the path to the
+environments.json your administrator gave you) and it will:
+
+1. ask for the path to your `environments.json` and let you pick an environment from it;
+2. ask you to restart Claude Code so the environment loads. You'll see a reminder when Claude Code starts again;
+3. on the second run, sign you in to the CTEM gateway through SSO, then to the remote `unizo-ctem-cloud` MCP server.
+
+The reminder keeps appearing at startup until setup finishes. It comes back when you switch to another environment.
+(Claude Code has no install-time hook, so the flow starts at the first session after install, not inside
+`/plugin install` itself.)
+
+### Plugin options instead of an environment
 
 1. Run `/plugin configure unizo-ctem@unizo-ctem` (Claude Code also prompts when you enable the plugin).
 2. Fill in the options below. Your administrator can supply the values.

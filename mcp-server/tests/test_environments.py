@@ -304,3 +304,22 @@ def test_cli_file_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> 
     assert "Environments file not found" in capsys.readouterr().err
     assert envs.cli(["list", "--file"]) == 1
     assert "needs a path" in capsys.readouterr().err
+
+
+# ── Setup completion ──
+
+
+def test_setup_done_is_recorded_and_reset_by_the_next_switch(user_file: Path) -> None:
+    claude = FakeClaude()
+    envs.use("staging", run=claude, out=lambda _: None)
+    assert not envs.read_state().get("setup_complete")
+    assert envs.cli(["setup-done"]) == 0
+    state = envs.read_state()
+    assert state["setup_complete"] is True and state["name"] == "staging" and state["remote_registered"] is True
+    envs.use("prod", run=claude, out=lambda _: None)
+    assert not envs.read_state().get("setup_complete")
+
+
+def test_setup_done_needs_an_active_environment(capsys: pytest.CaptureFixture[str]) -> None:
+    assert envs.cli(["setup-done"]) == 1
+    assert "No CTEM environment is active" in capsys.readouterr().err

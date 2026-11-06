@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""SessionStart hook: nudge first-time users to pick a CTEM environment.
+"""SessionStart hook: walk new users through /unizo-ctem:unizo-ctem-setup.
 
-Claude Code has no plugin install hook, so this runs at the start of every session and stays silent once the plugin
-is usable: an environment is active (``unizo-ctem-mcp env use <name>``) or a gateway URL is set with
-``/plugin configure``. Otherwise it shows the user a one-line hint and asks Claude to offer
-``/unizo-ctem:unizo-ctem-env``.
+Claude Code has no plugin install hook, so this runs at the start of every session; the first session after
+installing the plugin is where onboarding starts. It has three outcomes:
+
+* nothing set up (no active environment, no gateway URL in ``/plugin configure``): ask the user to run
+  ``/unizo-ctem:unizo-ctem-setup``, which asks for their environments.json, switches to an environment, and signs in.
+* an environment is active but setup hasn't finished (the switch needs a restart, so setup always spans two sessions):
+  ask the user to run ``/unizo-ctem:unizo-ctem-setup`` again to sign in to the gateway and to ``unizo-ctem-cloud``.
+* setup finished (``unizo-ctem-mcp env setup-done``), or the plugin options set a gateway with no environment:
+  stay silent.
 
 Standard library only. It never raises: a hook crash must not break the session.
 """
@@ -13,8 +18,8 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from pathlib import Path
+from typing import Any
 
 
 def config_dir() -> Path:
@@ -22,36 +27,50 @@ def config_dir() -> Path:
     return Path(base) / "unizo-ctem-mcp"
 
 
-def has_active_environment() -> bool:
+def active_state() -> dict[str, Any] | None:
     try:
         state = json.loads((config_dir() / "active-environment.json").read_text())
-        return bool(isinstance(state, dict) and state.get("name"))
     except (OSError, ValueError):
-        return False
+        return None
+    return state if isinstance(state, dict) and state.get("name") else None
 
 
 def has_configured_gateway() -> bool:
     return bool(os.environ.get("CLAUDE_PLUGIN_OPTION_API_URL", "").strip())
 
 
-def main() -> None:
-    if has_active_environment() or has_configured_gateway():
-        return
+def emit(message: str, context: str) -> None:
     print(
         json.dumps(
             {
-                "systemMessage": "Unizo CTEM: no environment selected yet. Run /unizo-ctem:unizo-ctem-env <path-to-environments.json> to pick one.",
-                "hookSpecificOutput": {
-                    "hookEventName": "SessionStart",
-                    "additionalContext": (
-                        "The Unizo CTEM plugin is installed but not set up: no CTEM environment is active and no "
-                        "gateway URL is configured. Before any CTEM work, and the first time the user mentions CTEM, "
-                        "ask for the path to their environments file and run /unizo-ctem:unizo-ctem-env <path> so they can pick an "
-                        "environment from it (or /unizo-ctem:unizo-ctem-env with no argument for the bundled ones)."
-                    ),
-                },
+                "systemMessage": message,
+                "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context},
             }
         )
+    )
+
+
+def main() -> None:
+    state = active_state()
+    if state is None:
+        if has_configured_gateway():
+            return
+        emit(
+            "Unizo CTEM: plugin installed. Run /unizo-ctem:unizo-ctem-setup to connect it to your CTEM deployment.",
+            "The Unizo CTEM plugin was just installed and isn't set up: no CTEM environment is active and no gateway "
+            "URL is configured. In your first reply, whatever the user asks, offer to run /unizo-ctem:unizo-ctem-setup. "
+            "It asks for the path to their environments.json, switches to an environment, and then signs them in. "
+            "Don't attempt CTEM work before that.",
+        )
+        return
+    if state.get("setup_complete"):
+        return
+    name = state["name"]
+    emit(
+        f'Unizo CTEM: environment "{name}" is active. Run /unizo-ctem:unizo-ctem-setup to finish signing in.',
+        f'The Unizo CTEM environment "{name}" was selected in an earlier session, but setup isn\'t finished: the user '
+        "still has to sign in to the CTEM gateway (SSO) and to the remote unizo-ctem-cloud MCP server. In your first "
+        "reply, offer to run /unizo-ctem:unizo-ctem-setup to finish both sign-ins.",
     )
 
 

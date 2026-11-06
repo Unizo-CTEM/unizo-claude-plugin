@@ -358,19 +358,33 @@ def off(*, run: Runner = _run, out: Callable[[str], None] = print) -> None:
     out("Restart Claude Code to apply.")
 
 
+def mark_setup_complete(*, out: Callable[[str], None] = print) -> None:
+    """Records that /unizo-ctem:unizo-ctem-setup finished for the active environment, so the onboarding hook goes quiet.
+
+    Switching environments rewrites the state without this flag, so the next environment is set up again."""
+    state = read_state()
+    if state is None:
+        raise EnvConfigError("No CTEM environment is active. Run /unizo-ctem:unizo-ctem-setup to pick one first.")
+    state["setup_complete"] = True
+    state["setup_completed_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+    _write_state(state)
+    out(f'Setup recorded as complete for environment "{state["name"]}".')
+
+
 def _detail(result: subprocess.CompletedProcess[str]) -> str:
     return (result.stderr or result.stdout).strip() or f"exit code {result.returncode}"
 
 
 # ── CLI: unizo-ctem-mcp env ... ─────────────────────────────────────────────────────────────────────────────────────
 
-USAGE = """usage: unizo-ctem-mcp env [list [--file <path>] | current | use <name> [--file <path>] [--force] | off]
+USAGE = """usage: unizo-ctem-mcp env [list [--file <path>] | current | use <name> [--file <path>] [--force] | off | setup-done]
 
   list           environments from the environments files (* marks the active one)
   --file <path>  read environments from <path> only, instead of the default files
   current        the active environment and where it's defined
   use <name>     make <name> active and register its remote MCP server as unizo-ctem-cloud
   off            go back to the plugin options; remove the unizo-ctem-cloud server this command added
+  setup-done     record that /unizo-ctem:unizo-ctem-setup finished for the active environment
 
 Files: {files}"""
 
@@ -434,6 +448,9 @@ def cli(args: list[str]) -> int:
             return 0
         if command == "off":
             off()
+            return 0
+        if command == "setup-done":
+            mark_setup_complete()
             return 0
         print(USAGE.format(files=", ".join(str(p) for p in environment_files())), file=sys.stderr)
         return 2
