@@ -110,7 +110,6 @@ Start `claude`, then:
 
 ## Step 9: Check the other plugin pieces
 
-- Ask *"What is CTEM and what are its five stages?"*. This should trigger the `unizo-ctem-basics` skill.
 - Paste a CVE or scanner finding and ask *"triage this"*. This should run the `exposure-triage` agent.
 
 ## Useful commands

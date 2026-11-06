@@ -31,7 +31,7 @@ Claude Code
 - **Environments** ([2.7](#27-environments-switching-between-deployments)) bundle the gateway, SSO and remote
   server URL + client ID per deployment, so you can switch with one command.
 - **Commands:** `/unizo-ctem:unizo-ctem-setup` (check the connection and walk through setup), `/unizo-ctem:unizo-ctem-env` (list and
-  switch environments) and `/unizo-ctem:unizo-ctem-hello` (list what the plugin provides). **Skill:** `unizo-ctem-basics`. **Agent:** `exposure-triage`.
+  switch environments) and `/unizo-ctem:unizo-ctem-hello` (list what the plugin provides). **Skill:** `unizo-ctem-review-queue`. **Agent:** `exposure-triage`.
 
 ---
 
@@ -458,7 +458,6 @@ The server inherits the `CTEM_*` variables exported in that shell.
 | C4 | "Who am I signed in as in CTEM?" | `analyst@example.com` |
 | C5 | Run `curl -X POST 127.0.0.1:9400/admin/revoke-all` in a terminal, then ask "Check my CTEM connection" | Claude reports you're signed out and offers to sign in (or does it) |
 | C6 | "Sign me out of CTEM" | `unizo_ctem_logout`; a follow-up status shows signed out |
-| C7 | "Explain the CTEM validation stage" | The `unizo-ctem-basics` skill answers |
 | C8 | Paste a CVE finding: "triage this" | The `exposure-triage` agent gives a priority and next step |
 | C9 | `export UNIZO_CTEM_OIDC_TOKEN_TYPE=jwt`, restart Claude Code, `/unizo-ctem:unizo-ctem-setup` | Claude lists the config problem |
 | C10 | Put a `local` environment (`api_url` `http://127.0.0.1:9401`, `sso_issuer` `http://127.0.0.1:9400`, `sso_client_id` `ctem-plugin-test`, `remote_mcp` for demo) in `~/.config/unizo-ctem-mcp/environments.json`, run `/unizo-ctem:unizo-ctem-env use local`, then `use demo`, restarting each time | `unizo_ctem_status` shows `environment` changing; `claude mcp get unizo-ctem-cloud` shows the right URL; `/mcp` asks you to sign in to `unizo-ctem-cloud` again after each switch |

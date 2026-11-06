@@ -100,8 +100,6 @@ Every skill must:
 4. Run `preview_commit` before `commit_actions`.
 5. Confirm with the user before any write.
 
-Also update `unizo-ctem-basics` to map the five CTEM stages to Unizo's objects (Exposure, Investigation, Plan, action, Run).
-
 ### 4.2 Commands
 
 | Command | Starts |

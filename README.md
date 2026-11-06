@@ -16,7 +16,6 @@ and switching between environments.
 | Command | `/unizo-ctem:unizo-ctem-env` | List environments (demo, staging, prod, ...) and switch between them |
 | Command | `/unizo-ctem:unizo-ctem-hello` | Check that the plugin is installed and list what it provides |
 | Command | `/unizo-ctem:unizo-ctem-queue` | Work your review queue (W1): Investigations awaiting review, mine or unclaimed, `crown`, `kev` |
-| Skill | `unizo-ctem-basics` | Explains CTEM concepts and the five-stage cycle |
 | Skill | `unizo-ctem-review-queue` | W1 end to end: queue → claim → review plans → `preview_commit` → `commit_actions`, confirming every write |
 | Hook | `unizo_ctem_guard` | On `unizo-ctem-cloud` tools: blocks `move_ticket` / `set_jira_assignee`, refuses `commit_actions` without a recent matching `preview_commit`, asks before every write, audits writes to `~/.config/unizo-ctem-mcp/audit.jsonl` |
 | Agent | `exposure-triage` | Triages a finding and recommends a priority and next step |
