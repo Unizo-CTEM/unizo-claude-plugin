@@ -4,8 +4,8 @@
 Claude Code has no plugin install hook, so this runs at the start of every session; the first session after
 installing the plugin is where onboarding starts. It has three outcomes:
 
-* nothing set up (no active environment, no ``UNIZO_CTEM_API_URL`` in the environment): ask the user to run
-  ``/unizo-ctem:unizo-ctem-setup``, which asks for their environments.json, switches to an environment, and signs in.
+* nothing set up (no active environment, no ``UNIZO_CTEM_API_URL`` in the environment): no message is shown, but
+  Claude is told to offer ``/unizo-ctem:unizo-ctem-setup``, which asks for their environments.json, switches to an environment, and signs in.
 * an environment is active but setup hasn't finished (the switch needs a restart, so setup always spans two sessions):
   ask the user to run ``/unizo-ctem:unizo-ctem-setup`` again to sign in to the gateway and to ``unizo-ctem-cloud``.
 * setup finished (``unizo-ctem-mcp env setup-done``), or ``UNIZO_CTEM_API_URL`` sets a gateway with no environment:
@@ -39,15 +39,12 @@ def has_configured_gateway() -> bool:
     return bool(os.environ.get("UNIZO_CTEM_API_URL", "").strip())
 
 
-def emit(message: str, context: str) -> None:
-    print(
-        json.dumps(
-            {
-                "systemMessage": message,
-                "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context},
-            }
-        )
-    )
+def emit(message: str | None, context: str) -> None:
+    """Prints the hook output. ``message`` is shown to the user; ``None`` keeps the hook silent on screen."""
+    out: dict[str, Any] = {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context}}
+    if message:
+        out["systemMessage"] = message
+    print(json.dumps(out))
 
 
 def main() -> None:
@@ -56,7 +53,7 @@ def main() -> None:
         if has_configured_gateway():
             return
         emit(
-            "Unizo CTEM: plugin installed. Run /unizo-ctem:unizo-ctem-setup to connect it to your CTEM deployment.",
+            None,
             "The Unizo CTEM plugin was just installed and isn't set up: no CTEM environment is active and no gateway "
             "URL is configured. In your first reply, whatever the user asks, offer to run /unizo-ctem:unizo-ctem-setup. "
             "It asks for the path to their environments.json, switches to an environment, and then signs them in. "

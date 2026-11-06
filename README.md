@@ -41,8 +41,8 @@ Each organization runs its own CTEM deployment on GCP or AWS.
 
 ### Guided setup (recommended)
 
-After installing, restart Claude Code. The first session greets you with
-*"Unizo CTEM: plugin installed. Run /unizo-ctem:unizo-ctem-setup"*. Run it (optionally with the path to the
+After installing, restart Claude Code and run `/unizo-ctem:unizo-ctem-setup` (Claude also offers it in its first reply
+until the plugin is set up). Run it (optionally with the path to the
 environments.json your administrator gave you) and it will:
 
 1. ask for the path to your `environments.json` and let you pick an environment from it;
