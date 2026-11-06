@@ -29,18 +29,18 @@ def test_empty_plugin_options_mean_defaults(monkeypatch: pytest.MonkeyPatch) -> 
     assert s.oidc.token_type == "access" and s.oidc.redirect_port == 8765
 
 
-def test_sso_settings_from_plugin_options(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sso_settings_from_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("UNIZO_CTEM_API_URL", "https://ctem.acme.com/")
     monkeypatch.setenv("UNIZO_CTEM_OIDC_ISSUER", "https://acme.okta.com/oauth2/default/")
     monkeypatch.setenv("UNIZO_CTEM_OIDC_CLIENT_ID", "0oa123")
     monkeypatch.setenv("UNIZO_CTEM_OIDC_REDIRECT_PORT", "9123")
     monkeypatch.setenv("UNIZO_CTEM_OIDC_TOKEN_TYPE", "ID")
-    monkeypatch.setenv("UNIZO_CTEM_CONFIGURE_HINT", "Run /plugin configure unizo-ctem@unizo-ctem")
+    monkeypatch.setenv("UNIZO_CTEM_CONFIGURE_HINT", "Run /unizo-ctem:unizo-ctem-setup")
     s = Settings.from_env()
     assert s.api_url == "https://ctem.acme.com" and s.auth_mode == "sso"
     assert s.oidc.issuer == "https://acme.okta.com/oauth2/default"
     assert s.oidc.redirect_uri == "http://localhost:9123/callback" and s.oidc.token_type == "id"
-    assert s.configure_hint == "Run /plugin configure unizo-ctem@unizo-ctem"
+    assert s.configure_hint == "Run /unizo-ctem:unizo-ctem-setup"
 
 
 def test_bad_values_are_reported_not_fatal(monkeypatch: pytest.MonkeyPatch) -> None:

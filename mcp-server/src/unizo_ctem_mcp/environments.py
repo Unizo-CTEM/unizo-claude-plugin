@@ -4,10 +4,9 @@ An environments file lists, per environment, the gateway/SSO settings for the lo
 MCP server (URL and OAuth client ID). ``unizo-ctem-mcp env use <name>`` makes one active:
 
 * the local ``unizo-ctem`` server reads the active environment at startup (see ``Settings.from_env``), so nothing is
-  written to the plugin options. Claude Code can't clear a plugin option, so rewriting them would leak one
-  environment's values into the next.
+  written anywhere else, and nothing from an earlier environment leaks into the next.
 * the remote server is registered at user scope as ``unizo-ctem-cloud`` with ``claude mcp add-json``, because Claude Code
-  doesn't substitute plugin options or environment variables into ``oauth.clientId``.
+  doesn't substitute environment variables into ``oauth.clientId``.
 
 Files, later ones overriding earlier ones by environment name:
 
@@ -17,7 +16,8 @@ Files, later ones overriding earlier ones by environment name:
 Any other file can be named with ``--file <path>`` (``env list --file <path>``, ``env use <name> --file <path>``).
 The active environment remembers the file it came from, so that file keeps working after the switch.
 
-Secrets never go in these files: ``api_token`` and ``sso_client_secret`` stay in ``/plugin configure``.
+Secrets never go in these files: ``api_token`` and ``sso_client_secret`` come from the ``UNIZO_CTEM_API_TOKEN`` /
+``UNIZO_CTEM_OIDC_CLIENT_SECRET`` environment variables, and only for environments that set ``use_env_secrets``.
 """
 
 from __future__ import annotations
@@ -46,7 +46,8 @@ SETTING_VARS = {
     "sso_redirect_port": "UNIZO_CTEM_OIDC_REDIRECT_PORT",
 }
 SECRET_VARS = {"api_token": "UNIZO_CTEM_API_TOKEN", "sso_client_secret": "UNIZO_CTEM_OIDC_CLIENT_SECRET"}
-OTHER_KEYS = {"description", "remote_mcp", "use_plugin_secrets"}
+OTHER_KEYS = {"description", "remote_mcp", "use_env_secrets", "use_plugin_secrets"}
+# ``use_plugin_secrets`` is the old name of ``use_env_secrets`` (from when secrets were plugin options).
 REMOTE_KEYS = {"url", "client_id", "callback_port", "scopes"}
 
 
@@ -82,21 +83,21 @@ class Environment:
     source: Path
     description: str = ""
     settings: Mapping[str, str] = field(default_factory=dict)
-    """Values keyed like the plugin options (``api_url``, ``sso_issuer``, ...)."""
+    """Settings keyed ``api_url``, ``sso_issuer``, ..."""
     remote: RemoteMcp | None = None
-    use_plugin_secrets: bool = False
-    """If true, ``api_token`` / ``sso_client_secret`` from ``/plugin configure`` are used with this environment.
+    use_env_secrets: bool = False
+    """If true, ``UNIZO_CTEM_API_TOKEN`` / ``UNIZO_CTEM_OIDC_CLIENT_SECRET`` from the environment are used with this one.
     Off by default, so a token set for one deployment is never sent to another."""
 
     def apply_to(self, env: Mapping[str, str]) -> dict[str, str]:
-        """Returns ``env`` with this environment's settings in place of the plugin options.
+        """Returns ``env`` with this environment's settings in place of any ``UNIZO_CTEM_*`` variables.
 
-        Every setting the environment leaves out falls back to the server default, not to the plugin option, so
+        Every setting the environment leaves out falls back to the server default, not to the variable, so
         nothing carries over from whatever was configured before."""
         out = dict(env)
         for key, var in SETTING_VARS.items():
             out[var] = self.settings.get(key, "")
-        if not self.use_plugin_secrets:
+        if not self.use_env_secrets:
             for var in SECRET_VARS.values():
                 out[var] = ""
         return out
@@ -160,8 +161,9 @@ def _parse_environment(name: str, raw: Any, path: Path) -> Environment:
     secrets = sorted(set(raw) & set(SECRET_VARS))
     if secrets:
         raise EnvConfigError(
-            f"{where} contains {', '.join(secrets)}. Secrets don't belong in this file: set them with "
-            '/plugin configure unizo-ctem@unizo-ctem and add "use_plugin_secrets": true to the environment.'
+            f"{where} contains {', '.join(secrets)}. Secrets don't belong in this file: export them as "
+            'UNIZO_CTEM_API_TOKEN / UNIZO_CTEM_OIDC_CLIENT_SECRET before starting Claude Code and add '
+            '"use_env_secrets": true to the environment.'
         )
     unknown = sorted(set(raw) - set(SETTING_VARS) - OTHER_KEYS)
     if unknown:
@@ -180,9 +182,12 @@ def _parse_environment(name: str, raw: Any, path: Path) -> Environment:
     if raw.get("remote_mcp") is not None:
         remote = _parse_remote(raw["remote_mcp"], where)
 
-    use_secrets = raw.get("use_plugin_secrets", False)
-    if not isinstance(use_secrets, bool):
-        raise EnvConfigError(f"{where}: use_plugin_secrets must be true or false.")
+    use_secrets = False
+    for key in ("use_env_secrets", "use_plugin_secrets"):
+        value = raw.get(key, False)
+        if not isinstance(value, bool):
+            raise EnvConfigError(f"{where}: {key} must be true or false.")
+        use_secrets = use_secrets or value
     description = raw.get("description", "")
     if not isinstance(description, str):
         raise EnvConfigError(f"{where}: description must be a string.")
@@ -345,16 +350,16 @@ def use(
 
 
 def off(*, run: Runner = _run, out: Callable[[str], None] = print) -> None:
-    """Deactivates environments: the plugin options apply again, and the remote server this command added is removed."""
+    """Deactivates environments: the UNIZO_CTEM_* variables apply again, and the remote server this command added is removed."""
     state = read_state()
     if state is None:
-        out("No CTEM environment is active; the plugin options from /plugin configure apply.")
+        out("No CTEM environment is active; UNIZO_CTEM_* environment variables apply, if set.")
         return
     if state.get("remote_registered") and _remote_registered(run):
         run(["claude", "mcp", "logout", REMOTE_SERVER_NAME])
         run(["claude", "mcp", "remove", "--scope", "user", REMOTE_SERVER_NAME])
     _write_state(None)
-    out(f'Deactivated environment "{state["name"]}". The plugin options from /plugin configure apply again.')
+    out(f'Deactivated environment "{state["name"]}". UNIZO_CTEM_* environment variables apply again, if set.')
     out("Restart Claude Code to apply.")
 
 
@@ -383,7 +388,7 @@ USAGE = """usage: unizo-ctem-mcp env [list [--file <path>] | current | use <name
   --file <path>  read environments from <path> only, instead of the default files
   current        the active environment and where it's defined
   use <name>     make <name> active and register its remote MCP server as unizo-ctem-cloud
-  off            go back to the plugin options; remove the unizo-ctem-cloud server this command added
+  off            go back to UNIZO_CTEM_* env vars; remove the unizo-ctem-cloud server this command added
   setup-done     record that /unizo-ctem:unizo-ctem-setup finished for the active environment
 
 Files: {files}"""
@@ -433,7 +438,7 @@ def cli(args: list[str]) -> int:
         if command == "current":
             state = read_state()
             if state is None:
-                print("No CTEM environment is active; the plugin options from /plugin configure apply.")
+                print("No CTEM environment is active; UNIZO_CTEM_* environment variables apply, if set.")
                 return 0
             env = active_environment()
             assert env is not None

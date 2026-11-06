@@ -24,9 +24,9 @@
       }
     },
     "ci": {
-      "description": "Service account against staging; the API token is set with /plugin configure",
+      "description": "Service account against staging; the API token comes from UNIZO_CTEM_API_TOKEN",
       "api_url": "https://ctem-staging.acme.com",
-      "use_plugin_secrets": true,
+      "use_env_secrets": true,
       "remote_mcp": null
     }
   }

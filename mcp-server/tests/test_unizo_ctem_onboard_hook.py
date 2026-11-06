@@ -14,7 +14,7 @@ HOOK = Path(__file__).resolve().parents[2] / "hooks" / "unizo_ctem_onboard.py"
 
 def run(extra_env: dict[str, str] | None = None) -> dict[str, Any] | None:
     env = os.environ.copy()
-    env.pop("CLAUDE_PLUGIN_OPTION_API_URL", None)
+    env.pop("UNIZO_CTEM_API_URL", None)
     env.update(extra_env or {})
     proc = subprocess.run(
         [sys.executable, str(HOOK)],
@@ -37,8 +37,8 @@ def test_fresh_install_points_to_setup() -> None:
     assert "environments.json" in out["hookSpecificOutput"]["additionalContext"]
 
 
-def test_plugin_options_gateway_without_environment_is_silent() -> None:
-    assert run({"CLAUDE_PLUGIN_OPTION_API_URL": "https://ctem.acme.com"}) is None
+def test_env_var_gateway_without_environment_is_silent() -> None:
+    assert run({"UNIZO_CTEM_API_URL": "https://ctem.acme.com"}) is None
 
 
 def test_environment_picked_but_not_signed_in_asks_to_finish(isolated_config: Path) -> None:

@@ -1,4 +1,4 @@
-"""Settings, read from the environment that Claude Code passes in via the plugin's .mcp.json."""
+"""Settings, read from the active named environment or from ``UNIZO_CTEM_*`` environment variables."""
 
 from __future__ import annotations
 
@@ -61,13 +61,13 @@ class Settings:
     oidc: OidcSettings | None = None
 
     configure_hint: str = "Set the CTEM_* environment variables before starting Claude Code"
-    """How the user fixes configuration. The plugin points this at ``/plugin configure``."""
+    """How the user fixes configuration. The plugin points this at ``/unizo-ctem:unizo-ctem-setup``."""
 
     problems: tuple[str, ...] = ()
     """Invalid settings that were replaced by defaults, reported by unizo_ctem_status instead of crashing."""
 
     environment: str = ""
-    """The active named environment (``unizo-ctem-mcp env use``), or empty when the plugin options apply."""
+    """The active named environment (``unizo-ctem-mcp env use``), or empty when the ``UNIZO_CTEM_*`` variables apply."""
 
     environment_source: str = ""
     """The environments file the active environment came from."""
@@ -86,8 +86,8 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> Settings:
-        """Reads the plugin options from the environment. If a named environment is active, its settings replace
-        the plugin options (see ``environments.py``)."""
+        """Reads ``UNIZO_CTEM_*`` from the environment. If a named environment is active, its settings replace
+        those variables (see ``environments.py``)."""
         from unizo_ctem_mcp import environments
 
         problems: list[str] = []
@@ -96,7 +96,7 @@ class Settings:
         try:
             active = environments.active_environment()
         except environments.EnvConfigError as e:
-            problems.append(f"{e} Using the plugin options instead.")
+            problems.append(f"{e} Using the UNIZO_CTEM_* environment variables instead.")
         if active is not None:
             values = active.apply_to(values)
         env = values.get

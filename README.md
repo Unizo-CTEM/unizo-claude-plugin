@@ -53,32 +53,31 @@ The reminder keeps appearing at startup until setup finishes. It comes back when
 (Claude Code has no install-time hook, so the flow starts at the first session after install, not inside
 `/plugin install` itself.)
 
-### Plugin options instead of an environment
+The plugin asks for nothing during `/plugin install`: all settings come from the environment you pick.
 
-1. Run `/plugin configure unizo-ctem@unizo-ctem` (Claude Code also prompts when you enable the plugin).
-2. Fill in the options below. Your administrator can supply the values.
-3. Restart Claude Code, then run `/unizo-ctem:unizo-ctem-setup` to check the connection and sign in.
+### Environment variables instead of an environment
 
-To configure from a script, for example when rolling out to a team:
+Without an environments file, export the settings before starting Claude Code; the `unizo-ctem` server inherits them.
+Then run `/unizo-ctem:unizo-ctem-setup` to check the connection and sign in.
 
 ```
-echo '{"api_url":"https://ctem.acme.com","sso_issuer":"https://acme.okta.com/oauth2/default","sso_client_id":"0oa..."}' \
-  | claude plugin configure unizo-ctem@unizo-ctem --values-stdin
+export UNIZO_CTEM_API_URL=https://ctem.acme.com
+export UNIZO_CTEM_OIDC_ISSUER=https://acme.okta.com/oauth2/default
+export UNIZO_CTEM_OIDC_CLIENT_ID=0oa...
+claude
 ```
 
-| Option | Required | Meaning |
-|---|---|---|
-| `api_url` | yes | Base URL of your CTEM gateway, e.g. `https://ctem.acme.com` |
-| `api_token` | no | Static bearer token (service accounts, CI). If set, it takes precedence over SSO. Stored as a secret |
-| `sso_issuer` | for SSO | OIDC issuer URL; `<issuer>/.well-known/openid-configuration` must exist |
-| `sso_client_id` | for SSO | Client ID of the native/public app registered for this plugin |
-| `sso_client_secret` | no | Only if your IdP requires a secret for native apps. Stored as a secret |
-| `sso_scopes` | no | Default `openid profile email offline_access` |
-| `sso_audience` | no | Sent as `audience` (Auth0, some Okta authorization servers) |
-| `sso_token_type` | no | `access` (default) or `id`: the token your gateway expects |
-| `sso_redirect_port` | no | Local callback port, default `8765` |
-
-Secrets marked sensitive are kept in Claude Code's secure storage, not in its settings files.
+| Variable | Environment key | Required | Meaning |
+|---|---|---|---|
+| `UNIZO_CTEM_API_URL` | `api_url` | yes | Base URL of your CTEM gateway, e.g. `https://ctem.acme.com` |
+| `UNIZO_CTEM_API_TOKEN` | (secret) | no | Static bearer token (service accounts, CI). If set, it takes precedence over SSO |
+| `UNIZO_CTEM_OIDC_ISSUER` | `sso_issuer` | for SSO | OIDC issuer URL; `<issuer>/.well-known/openid-configuration` must exist |
+| `UNIZO_CTEM_OIDC_CLIENT_ID` | `sso_client_id` | for SSO | Client ID of the native/public app registered for this plugin |
+| `UNIZO_CTEM_OIDC_CLIENT_SECRET` | (secret) | no | Only if your IdP requires a secret for native apps |
+| `UNIZO_CTEM_OIDC_SCOPES` | `sso_scopes` | no | Default `openid profile email offline_access` |
+| `UNIZO_CTEM_OIDC_AUDIENCE` | `sso_audience` | no | Sent as `audience` (Auth0, some Okta authorization servers) |
+| `UNIZO_CTEM_OIDC_TOKEN_TYPE` | `sso_token_type` | no | `access` (default) or `id`: the token your gateway expects |
+| `UNIZO_CTEM_OIDC_REDIRECT_PORT` | `sso_redirect_port` | no | Local callback port, default `8765` |
 
 ### Signing in with SSO
 
@@ -99,7 +98,7 @@ switch with one command. Each environment sets the gateway and SSO values for th
 ```
 /unizo-ctem:unizo-ctem-env                 # list; * marks the active one
 /unizo-ctem:unizo-ctem-env use staging     # switch, then restart Claude Code
-/unizo-ctem:unizo-ctem-env off             # back to the /plugin configure options
+/unizo-ctem:unizo-ctem-env off             # back to UNIZO_CTEM_* environment variables
 ```
 
 The plugin ships [`environments.json`](environments.json) with `demo`. Add your own in
@@ -127,20 +126,20 @@ keeps in a repository. An entry there replaces a shipped entry with the same nam
 
 | Key | Meaning |
 |---|---|
-| `api_url`, `sso_issuer`, `sso_client_id`, `sso_scopes`, `sso_audience`, `sso_token_type`, `sso_redirect_port` | Same as the plugin options above |
+| `api_url`, `sso_issuer`, `sso_client_id`, `sso_scopes`, `sso_audience`, `sso_token_type`, `sso_redirect_port` | Same as the variables above |
 | `remote_mcp.url` | Remote MCP endpoint (`https://`; `http://` only for localhost) |
 | `remote_mcp.client_id` | Pre-registered OAuth client ID. Leave it out to use dynamic client registration |
 | `remote_mcp.callback_port`, `remote_mcp.scopes` | Optional OAuth callback port and scopes for the remote server |
-| `use_plugin_secrets` | `true` to use the `api_token` / `sso_client_secret` set in `/plugin configure` with this environment |
+| `use_env_secrets` | `true` to use `UNIZO_CTEM_API_TOKEN` / `UNIZO_CTEM_OIDC_CLIENT_SECRET` from your shell with this environment (`use_plugin_secrets` still works) |
 | `description` | Shown in the list |
 
 How it works:
-- While an environment is active, its values **replace** every plugin option: keys it leaves out fall back to the
+- While an environment is active, its values **replace** every `UNIZO_CTEM_*` variable: keys it leaves out fall back to the
   defaults, not to whatever was configured before. Nothing leaks from one deployment into the next.
-- Secrets aren't allowed in the file. An environment uses the token or client secret from `/plugin configure` only
-  if it sets `"use_plugin_secrets": true`, so a token for one deployment is never sent to another.
+- Secrets aren't allowed in the file. An environment uses the token or client secret from the environment variables
+  only if it sets `"use_env_secrets": true`, so a token for one deployment is never sent to another.
 - `use` registers `unizo-ctem-cloud` at user scope with `claude mcp add-json`. That's needed because Claude Code doesn't
-  substitute plugin options or environment variables into a remote server's `oauth.clientId`. When the URL or client
+  substitute environment variables into a remote server's `oauth.clientId`. When the URL or client
   ID changes, the old sign-in is cleared, because Claude Code would otherwise reuse the cached OAuth client. Sign in
   again from `/mcp` → `unizo-ctem-cloud` → **Authenticate**.
 - The active environment is kept in `~/.config/unizo-ctem-mcp/active-environment.json`. Restart Claude Code after switching.
@@ -185,8 +184,9 @@ signs in `analyst@example.com` instantly but still enforces the client ID, redir
 python3 mcp-server/tests/e2e/fake_stack.py --access-ttl 70     # 70s tokens: refresh kicks in after ~10s
 ```
 
-Point the installed plugin at it (`/plugin configure unizo-ctem@unizo-ctem`):
-`api_url` = `http://127.0.0.1:9401`, `sso_issuer` = `http://127.0.0.1:9400`, `sso_client_id` = `ctem-plugin-test`.
+Point the installed plugin at it with a `local` environment (`api_url` = `http://127.0.0.1:9401`,
+`sso_issuer` = `http://127.0.0.1:9400`, `sso_client_id` = `ctem-plugin-test`), or start Claude Code with the matching
+`UNIZO_CTEM_*` variables.
 Then run `/unizo-ctem:unizo-ctem-setup`. Other things to try:
 
 - Revoke every session: `curl -X POST 127.0.0.1:9400/admin/revoke-all`, then ask Claude to check the connection.
@@ -194,14 +194,14 @@ Then run `/unizo-ctem:unizo-ctem-setup`. Other things to try:
 - Test the "no browser" path: start Claude Code with `BROWSER="/usr/bin/true %s"` and the sign-in URL is shown
   instead of opened. (`/usr/bin/false` doesn't work: Python then falls back to the default browser.)
 
-Plugins loaded with `--plugin-dir` can't be configured, so install from a local marketplace to test settings:
+To test the install flow, install from a local marketplace:
 `claude plugin marketplace add /path/to/ctem-claude-plugin`, then `claude plugin install unizo-ctem@unizo-ctem`.
 
-Outside the plugin, the MCP server reads the `CTEM_*` environment variables directly (see
+Outside the plugin, the MCP server reads the same `UNIZO_CTEM_*` environment variables (see
 `mcp-server/src/unizo_ctem_mcp/config.py`). `uv run --project mcp-server unizo-ctem-mcp login | logout | whoami` signs in
 from a terminal and uses the same token cache.
 
-The root `.mcp.json` uses `${user_config.*}` placeholders that only resolve when Claude Code loads it as a plugin.
+The root `.mcp.json` uses `${CLAUDE_PLUGIN_ROOT}`, which only resolves when Claude Code loads it as a plugin.
 When you open this repo directly, disable its project-scoped copies (`disabledMcpjsonServers` in
 `.claude/settings.local.json`).
 

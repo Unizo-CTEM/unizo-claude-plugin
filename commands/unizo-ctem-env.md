@@ -44,7 +44,7 @@ Then:
   **restart Claude Code**, then run `/unizo-ctem:unizo-ctem-setup` to sign in to the gateway, and to sign in to the remote server
   with `/mcp` → `unizo-ctem-cloud` → Authenticate. The switch signs the remote server out whenever its URL or client ID
   changes. That's expected.
-- **off**: say the plugin options from `/plugin configure unizo-ctem@unizo-ctem` apply again after a restart.
+- **off**: say no environment is active after a restart; only `UNIZO_CTEM_*` environment variables apply, if set.
 - **An error**: show it verbatim. If no environments file exists or the name is unknown, explain the file format
   with this example and offer to create the user's file:
 
@@ -64,5 +64,6 @@ Then:
 
   If `unizo-ctem-cloud` already exists and this command didn't add it, ask the user before re-running with `--force`.
 
-Never put API tokens or client secrets in an environments file. They belong in `/plugin configure unizo-ctem@unizo-ctem`,
-and an environment uses them only if it sets `"use_plugin_secrets": true`.
+Never put API tokens or client secrets in an environments file. The user exports them as `UNIZO_CTEM_API_TOKEN` /
+`UNIZO_CTEM_OIDC_CLIENT_SECRET` before starting Claude Code, and an environment uses them only if it sets
+`"use_env_secrets": true`.

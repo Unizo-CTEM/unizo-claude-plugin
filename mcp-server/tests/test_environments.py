@@ -1,4 +1,4 @@
-"""Named environments: file parsing, how the active one replaces plugin options, and the switch command."""
+"""Named environments: file parsing, how the active one replaces UNIZO_CTEM_* variables, and the switch command."""
 
 from __future__ import annotations
 
@@ -97,6 +97,7 @@ def test_custom_file_location(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         ({"remote_mcp": {"url": "https://x/mcp", "clientId": "x"}}, "unknown key(s) clientId"),
         ({"remote_mcp": {"url": "https://x/mcp", "callback_port": "3118"}}, "callback_port must be"),
         ({"use_plugin_secrets": "yes"}, "use_plugin_secrets must be"),
+        ({"use_env_secrets": "yes"}, "use_env_secrets must be"),
     ],
 )
 def test_invalid_environments_are_rejected(tmp_path: Path, environment: dict, message: str) -> None:
@@ -115,11 +116,11 @@ def test_remote_server_config_for_claude() -> None:
     assert envs.RemoteMcp("https://x/mcp").server_config() == {"type": "http", "url": "https://x/mcp"}
 
 
-# ── The active environment replaces the plugin options ──
+# ── The active environment replaces the UNIZO_CTEM_* variables ──
 
 
 def plugin_options(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Values a user set earlier with /plugin configure, for some other deployment."""
+    """UNIZO_CTEM_* variables a user exported earlier, for some other deployment."""
     for var, value in {
         "UNIZO_CTEM_API_URL": "https://old.example.com",
         "UNIZO_CTEM_API_TOKEN": "old-token",
@@ -156,10 +157,20 @@ def test_plugin_secrets_only_when_the_environment_opts_in(
 ) -> None:
     plugin_options(monkeypatch)
     write(isolated_config / "config" / "unizo-ctem-mcp" / "environments.json",
-          {"ci": {"api_url": "https://ctem.acme.com", "use_plugin_secrets": True}})
+          {"ci": {"api_url": "https://ctem.acme.com", "use_env_secrets": True}})
     envs.use("ci", run=FakeClaude(), out=lambda _: None)
     s = Settings.from_env()
     assert s.api_token == "old-token" and s.auth_mode == "static-token"
+
+
+def test_old_use_plugin_secrets_key_still_works(
+    monkeypatch: pytest.MonkeyPatch, isolated_config: Path
+) -> None:
+    plugin_options(monkeypatch)
+    write(isolated_config / "config" / "unizo-ctem-mcp" / "environments.json",
+          {"ci": {"api_url": "https://ctem.acme.com", "use_plugin_secrets": True}})
+    envs.use("ci", run=FakeClaude(), out=lambda _: None)
+    assert Settings.from_env().api_token == "old-token"
 
 
 def test_missing_active_environment_is_reported_not_fatal(

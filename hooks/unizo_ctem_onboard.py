@@ -4,11 +4,11 @@
 Claude Code has no plugin install hook, so this runs at the start of every session; the first session after
 installing the plugin is where onboarding starts. It has three outcomes:
 
-* nothing set up (no active environment, no gateway URL in ``/plugin configure``): ask the user to run
+* nothing set up (no active environment, no ``UNIZO_CTEM_API_URL`` in the environment): ask the user to run
   ``/unizo-ctem:unizo-ctem-setup``, which asks for their environments.json, switches to an environment, and signs in.
 * an environment is active but setup hasn't finished (the switch needs a restart, so setup always spans two sessions):
   ask the user to run ``/unizo-ctem:unizo-ctem-setup`` again to sign in to the gateway and to ``unizo-ctem-cloud``.
-* setup finished (``unizo-ctem-mcp env setup-done``), or the plugin options set a gateway with no environment:
+* setup finished (``unizo-ctem-mcp env setup-done``), or ``UNIZO_CTEM_API_URL`` sets a gateway with no environment:
   stay silent.
 
 Standard library only. It never raises: a hook crash must not break the session.
@@ -36,7 +36,7 @@ def active_state() -> dict[str, Any] | None:
 
 
 def has_configured_gateway() -> bool:
-    return bool(os.environ.get("CLAUDE_PLUGIN_OPTION_API_URL", "").strip())
+    return bool(os.environ.get("UNIZO_CTEM_API_URL", "").strip())
 
 
 def emit(message: str, context: str) -> None:

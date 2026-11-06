@@ -23,7 +23,7 @@ Do this step if **any** of these is true; otherwise go to step 2:
 - `$ARGUMENTS` names an environments file (the user wants to pick or switch environments), or
 - `environment` is not set **and** `api_url` is empty (nothing configured yet).
 
-If `environment` is not set but `api_url` is configured, the user set up the plugin options with `/plugin configure`
+If `environment` is not set but `api_url` is configured, the user set `UNIZO_CTEM_*` environment variables
 and doesn't need an environment: skip to step 2 (there will be no remote server; mention that in step 3).
 
 1. Get the environments file:
@@ -52,8 +52,8 @@ Summarize the status in a few lines: environment and the file it came from, API 
 Then:
 
 - `auth_mode` is `none`: they need either an API token or SSO settings (issuer URL + client ID, from their identity
-  provider admin), in the environments file or in `/plugin configure unizo-ctem@unizo-ctem`. Changes apply after a
-  restart. Stop.
+  provider admin), in the environments file (secrets as `UNIZO_CTEM_API_TOKEN` / `UNIZO_CTEM_OIDC_CLIENT_SECRET`
+  environment variables with `"use_env_secrets": true`). Changes apply after a restart. Stop.
 - `auth_mode` is `sso` and not signed in, or the token expired and can't refresh: call `unizo_ctem_login` once. If it
   returns a `login_url`, show it, ask the user to finish signing in there, and call `unizo_ctem_status` again when
   they say they're done. Don't call `unizo_ctem_login` in a loop.
@@ -62,7 +62,7 @@ Then:
 
 ## 3. Remote MCP sign-in (`unizo-ctem-cloud`)
 
-Skip this step if no environment is active (plugin options only): there's no remote server.
+Skip this step if no environment is active (environment variables only): there's no remote server.
 
 Run `uv run --quiet --project ${CLAUDE_PLUGIN_ROOT}/mcp-server unizo-ctem-mcp env current`. If its `remote_mcp` is
 `null`, the environment has no remote server: skip to step 4. Otherwise look at the tools you have from
@@ -89,4 +89,4 @@ uv run --quiet --project ${CLAUDE_PLUGIN_ROOT}/mcp-server unizo-ctem-mcp env set
 they can switch environments later with `/unizo-ctem:unizo-ctem-setup <path>` or `/unizo-ctem:unizo-ctem-env use <name>`.
 Suggest `/unizo-ctem:queue` as a first thing to try.
 
-Never ask the user to paste tokens or secrets into the chat; secrets belong in `/plugin configure`.
+Never ask the user to paste tokens or secrets into the chat; secrets belong in environment variables.
