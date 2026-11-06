@@ -10,7 +10,7 @@
         "unizo-ctem-mcp"
       ],
       "env": {
-        "UNIZO_CTEM_CONFIGURE_HINT": "Run /unizo-ctem:unizo-ctem-setup to pick an environment",
+        "UNIZO_CTEM_CONFIGURE_HINT": "Run /unizo-ctem:unizo-ctem-plugin-configure to pick an environment",
         "UNIZO_CTEM_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}"
       }
     }

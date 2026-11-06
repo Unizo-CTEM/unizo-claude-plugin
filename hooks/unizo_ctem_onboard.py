@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""SessionStart hook: walk new users through /unizo-ctem:unizo-ctem-setup.
+"""SessionStart hook: walk new users through /unizo-ctem:unizo-ctem-plugin-configure.
 
 Claude Code has no plugin install hook, so this runs at the start of every session; the first session after
 installing the plugin is where onboarding starts. It has three outcomes:
 
 * nothing set up (no active environment, no ``UNIZO_CTEM_API_URL`` in the environment): no message is shown, but
-  Claude is told to offer ``/unizo-ctem:unizo-ctem-setup``, which asks for their environments.json, switches to an environment, and signs in.
+  Claude is told to offer ``/unizo-ctem:unizo-ctem-plugin-configure``, which asks for their environments.json, switches to an environment, and signs in.
 * an environment is active but setup hasn't finished (the switch needs a restart, so setup always spans two sessions):
-  tell the user setup finishes with their first message, and tell Claude to run ``/unizo-ctem:unizo-ctem-setup``
+  tell the user setup finishes with their first message, and tell Claude to run ``/unizo-ctem:unizo-ctem-plugin-configure``
   in its first reply without asking. The single SSO sign-in normally happened before the restart and also covers
   ``unizo-ctem-cloud``, so this checks the connection and signs in only if needed. A hook can't start a turn on
   its own, so the user's first message is what kicks it off.
@@ -58,7 +58,7 @@ def main() -> None:
         emit(
             None,
             "The Unizo CTEM plugin was just installed and isn't set up: no CTEM environment is active and no gateway "
-            "URL is configured. In your first reply, whatever the user asks, offer to run /unizo-ctem:unizo-ctem-setup. "
+            "URL is configured. In your first reply, whatever the user asks, offer to run /unizo-ctem:unizo-ctem-plugin-configure. "
             "It asks for the path to their environments.json, switches to an environment, and then signs them in. "
             "Don't attempt CTEM work before that.",
         )
@@ -70,7 +70,7 @@ def main() -> None:
         f'Unizo CTEM: environment "{name}" is active. Setup finishes with your first message.',
         f'The Unizo CTEM environment "{name}" was selected in an earlier session and Claude Code has since restarted, '
         "but setup isn't finished. In your first reply, whatever the user says, finish it right away without asking "
-        "first: invoke the unizo-ctem:unizo-ctem-setup skill with the Skill tool (no arguments) and follow it from "
+        "first: invoke the unizo-ctem:unizo-ctem-plugin-configure skill with the Skill tool (no arguments) and follow it from "
         "step 0. It skips the environment step and checks the connection. One SSO sign-in covers both the CTEM "
         "gateway and the remote unizo-ctem-cloud server; sign in (unizo_ctem_login) only if the gateway isn't signed "
         "in, and use mcp__unizo-ctem-cloud__authenticate only as the last resort the command describes. Once setup "

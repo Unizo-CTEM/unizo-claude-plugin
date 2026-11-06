@@ -34,7 +34,7 @@ def test_fresh_install_points_claude_to_setup_without_a_banner() -> None:
     out = run()
     assert out is not None
     assert "systemMessage" not in out
-    assert "/unizo-ctem:unizo-ctem-setup" in out["hookSpecificOutput"]["additionalContext"]
+    assert "/unizo-ctem:unizo-ctem-plugin-configure" in out["hookSpecificOutput"]["additionalContext"]
     assert "environments.json" in out["hookSpecificOutput"]["additionalContext"]
 
 
@@ -48,7 +48,7 @@ def test_environment_picked_but_setup_unfinished_finishes_it(isolated_config: Pa
     assert out is not None
     assert '"staging"' in out["systemMessage"] and "first message" in out["systemMessage"]
     context = out["hookSpecificOutput"]["additionalContext"]
-    assert "unizo-ctem:unizo-ctem-setup" in context
+    assert "unizo-ctem:unizo-ctem-plugin-configure" in context
     assert "without asking" in context
     assert "One SSO sign-in covers both" in context
 
@@ -63,4 +63,4 @@ def test_corrupt_state_never_breaks_the_session(isolated_config: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("{not json")
     out = run()
-    assert out is not None and "/unizo-ctem:unizo-ctem-setup" in out["hookSpecificOutput"]["additionalContext"]
+    assert out is not None and "/unizo-ctem:unizo-ctem-plugin-configure" in out["hookSpecificOutput"]["additionalContext"]

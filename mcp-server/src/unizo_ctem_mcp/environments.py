@@ -8,13 +8,9 @@ MCP server (URL and OAuth client ID). ``unizo-ctem-mcp env use <name>`` makes on
 * the remote server is registered at user scope as ``unizo-ctem-cloud`` with ``claude mcp add-json``, because Claude Code
   doesn't substitute environment variables into ``oauth.clientId``.
 
-Files, later ones overriding earlier ones by environment name:
-
-1. ``<plugin root>/environments.json``, shipped with the plugin
-2. ``$UNIZO_CTEM_ENVIRONMENTS_FILE``, or else ``~/.config/unizo-ctem-mcp/environments.json``
-
-Any other file can be named with ``--file <path>`` (``env list --file <path>``, ``env use <name> --file <path>``).
-The active environment remembers the file it came from, so that file keeps working after the switch.
+There is no default environments file: the user always names one with ``--file <path>``
+(``env list --file <path>``, ``env use <name> --file <path>``). The active environment remembers the file it came
+from and is read from that file only.
 
 Secrets never go in these files: ``api_token`` and ``sso_client_secret`` come from the ``UNIZO_CTEM_API_TOKEN`` /
 ``UNIZO_CTEM_OIDC_CLIENT_SECRET`` environment variables, and only for environments that set ``use_env_secrets``.
@@ -115,22 +111,6 @@ def config_dir() -> Path:
     return Path(base) / "unizo-ctem-mcp"
 
 
-def plugin_root() -> Path:
-    root = os.environ.get("UNIZO_CTEM_PLUGIN_ROOT", "").strip() or os.environ.get("CLAUDE_PLUGIN_ROOT", "").strip()
-    if root:
-        return Path(root)
-    return Path(__file__).resolve().parents[3]  # <root>/mcp-server/src/unizo_ctem_mcp/environments.py
-
-
-def user_file() -> Path:
-    custom = os.environ.get("UNIZO_CTEM_ENVIRONMENTS_FILE", "").strip()
-    return Path(custom).expanduser() if custom else config_dir() / "environments.json"
-
-
-def environment_files() -> list[Path]:
-    return [plugin_root() / "environments.json", user_file()]
-
-
 def resolve_file(path: str | Path) -> Path:
     """An environments file named by the user, as an absolute path (the state outlives the current directory)."""
     resolved = Path(path).expanduser().resolve()
@@ -222,15 +202,6 @@ def _parse_remote(raw: Any, where: str) -> RemoteMcp:
     return RemoteMcp(url, client_id.strip(), port, scopes.strip())
 
 
-def load_environments(files: list[Path] | None = None) -> dict[str, Environment]:
-    """All environments from the files that exist; a later file replaces an earlier one's entry of the same name."""
-    found: dict[str, Environment] = {}
-    for path in files if files is not None else environment_files():
-        if path.is_file():
-            found.update(parse_file(path))
-    return found
-
-
 def read_state() -> dict[str, Any] | None:
     path = state_file()
     if not path.is_file():
@@ -249,17 +220,16 @@ def active_environment() -> Environment | None:
         return None
     name = state["name"]
     source = Path(state["source"]) if isinstance(state.get("source"), str) else None
-    if source is not None and source.is_file():
-        from_source = parse_file(source)
-        if name in from_source:
-            return from_source[name]
-    envs = load_environments()
-    if name not in envs:
+    pick_again = "Run /unizo-ctem:unizo-ctem-plugin-configure <environments.json> to pick an environment again."
+    if source is None or not source.is_file():
         raise EnvConfigError(
-            f'The active CTEM environment "{name}" is no longer in any environments file. '
-            "Run /unizo-ctem:unizo-ctem-setup <environments.json> to pick another."
+            f'The environments file of the active CTEM environment "{name}" ({source or "unknown"}) is missing. '
+            + pick_again
         )
-    return envs[name]
+    found = parse_file(source)
+    if name not in found:
+        raise EnvConfigError(f'The active CTEM environment "{name}" is no longer in {source}. ' + pick_again)
+    return found[name]
 
 
 def _write_state(data: dict[str, Any] | None) -> None:
@@ -304,20 +274,18 @@ def _headers_helper(env: Environment) -> str:
 def use(
     name: str,
     *,
-    file: Path | None = None,
+    file: Path,
     force: bool = False,
     run: Runner = _run,
     out: Callable[[str], None] = print,
 ) -> Environment:
     """Makes ``name`` the active environment and registers its remote MCP server.
 
-    With ``file``, ``name`` is looked up in that file only; otherwise in the default environments files."""
-    envs = parse_file(file) if file is not None else load_environments()
+    ``name`` is looked up in ``file``, the environments file the user named."""
+    envs = parse_file(file)
     if name not in envs:
-        where = f" in {file}" if file is not None else ""
-        available = ", ".join(sorted(envs)) or "none (no environments file found)"
-        available = f"{available}{where}"
-        raise EnvConfigError(f'No environment named "{name}". Available: {available}.')
+        available = ", ".join(sorted(envs)) or "none"
+        raise EnvConfigError(f'No environment named "{name}". Available: {available} in {file}.')
     env = envs[name]
     state = read_state()
     owned = bool(state and state.get("remote_registered"))
@@ -360,7 +328,7 @@ def use(
         out(f"  remote MCP: {env.remote.url}  client ID: {cid}")
     else:
         out("  remote MCP: none")
-    out("Restart Claude Code to apply. Then sign in: /unizo-ctem:unizo-ctem-setup for the gateway, /mcp -> unizo-ctem-cloud for the "
+    out("Restart Claude Code to apply. Then sign in: /unizo-ctem:unizo-ctem-plugin-configure for the gateway, /mcp -> unizo-ctem-cloud for the "
         "remote server.")
     return env
 
@@ -380,12 +348,12 @@ def off(*, run: Runner = _run, out: Callable[[str], None] = print) -> None:
 
 
 def mark_setup_complete(*, out: Callable[[str], None] = print) -> None:
-    """Records that /unizo-ctem:unizo-ctem-setup finished for the active environment, so the onboarding hook goes quiet.
+    """Records that /unizo-ctem:unizo-ctem-plugin-configure finished for the active environment, so the onboarding hook goes quiet.
 
     Switching environments rewrites the state without this flag, so the next environment is set up again."""
     state = read_state()
     if state is None:
-        raise EnvConfigError("No CTEM environment is active. Run /unizo-ctem:unizo-ctem-setup to pick one first.")
+        raise EnvConfigError("No CTEM environment is active. Run /unizo-ctem:unizo-ctem-plugin-configure to pick one first.")
     state["setup_complete"] = True
     state["setup_completed_at"] = datetime.now(UTC).isoformat(timespec="seconds")
     _write_state(state)
@@ -398,16 +366,16 @@ def _detail(result: subprocess.CompletedProcess[str]) -> str:
 
 # ── CLI: unizo-ctem-mcp env ... ─────────────────────────────────────────────────────────────────────────────────────
 
-USAGE = """usage: unizo-ctem-mcp env [list [--file <path>] | current | use <name> [--file <path>] [--force] | off | setup-done]
+USAGE = """usage: unizo-ctem-mcp env [list --file <path> | current | use <name> --file <path> [--force] | off | setup-done]
 
-  list           environments from the environments files (* marks the active one)
-  --file <path>  read environments from <path> only, instead of the default files
+  list           environments in the file (* marks the active one)
+  --file <path>  the environments file to read (required for list and use; there is no default file)
   current        the active environment and where it's defined
   use <name>     make <name> active and register its remote MCP server as unizo-ctem-cloud
   off            go back to UNIZO_CTEM_* env vars; remove the unizo-ctem-cloud server this command added
-  setup-done     record that /unizo-ctem:unizo-ctem-setup finished for the active environment
+  setup-done     record that /unizo-ctem:unizo-ctem-plugin-configure finished for the active environment"""
 
-Files: {files}"""
+NEEDS_FILE = "{command} needs --file <path-to-environments.json>. There is no default environments file."
 
 
 def _pop_file(args: list[str]) -> tuple[list[str], Path | None]:
@@ -435,15 +403,15 @@ def cli(args: list[str]) -> int:
     try:
         args, file = _pop_file(args)
         command = args[0] if args else "list"
+        if command in ("list", "use") and file is None:
+            raise EnvConfigError(NEEDS_FILE.format(command=command))
         if command == "list":
-            envs = parse_file(file) if file is not None else load_environments()
+            assert file is not None
+            envs = parse_file(file)
             state = read_state() or {}
-            active = state.get("name")
-            if file is not None and state.get("source") != str(file):
-                active = None
+            active = state.get("name") if state.get("source") == str(file) else None
             if not envs:
-                where = str(file) if file is not None else f"Create {user_file()} (see environments.example.json)."
-                print(f"No environments found. {where}")
+                print(f"No environments found in {file}.")
                 return 1
             for name in sorted(envs):
                 env = envs[name]
@@ -465,6 +433,7 @@ def cli(args: list[str]) -> int:
             print(f"  remote_mcp: {json.dumps(state.get('remote'))}")
             return 0
         if command == "use" and len(args) >= 2:
+            assert file is not None
             use(args[1], file=file, force="--force" in args[2:])
             return 0
         if command == "off":
@@ -473,7 +442,7 @@ def cli(args: list[str]) -> int:
         if command == "setup-done":
             mark_setup_complete()
             return 0
-        print(USAGE.format(files=", ".join(str(p) for p in environment_files())), file=sys.stderr)
+        print(USAGE, file=sys.stderr)
         return 2
     except EnvConfigError as e:
         print(f"error: {e}", file=sys.stderr)

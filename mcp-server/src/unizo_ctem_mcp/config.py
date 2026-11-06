@@ -61,7 +61,7 @@ class Settings:
     oidc: OidcSettings | None = None
 
     configure_hint: str = "Set the CTEM_* environment variables before starting Claude Code"
-    """How the user fixes configuration. The plugin points this at ``/unizo-ctem:unizo-ctem-setup``."""
+    """How the user fixes configuration. The plugin points this at ``/unizo-ctem:unizo-ctem-plugin-configure``."""
 
     problems: tuple[str, ...] = ()
     """Invalid settings that were replaced by defaults, reported by unizo_ctem_status instead of crashing."""

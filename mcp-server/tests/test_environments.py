@@ -11,8 +11,6 @@ import pytest
 from unizo_ctem_mcp import environments as envs
 from unizo_ctem_mcp.config import Settings
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-
 STAGING = {
     "description": "Acme staging",
     "api_url": "https://ctem-staging.acme.com",
@@ -35,8 +33,8 @@ def write(path: Path, environments: dict) -> Path:
 
 
 @pytest.fixture
-def user_file(isolated_config: Path) -> Path:
-    return write(isolated_config / "config" / "unizo-ctem-mcp" / "environments.json", {"staging": STAGING, "prod": PROD})
+def env_file(tmp_path: Path) -> Path:
+    return write(tmp_path / "envs" / "acme.json", {"staging": STAGING, "prod": PROD})
 
 
 class FakeClaude:
@@ -64,27 +62,6 @@ class FakeClaude:
 
 
 # ── Parsing ──
-
-
-def test_bundled_environments_file_is_valid() -> None:
-    found = envs.parse_file(REPO_ROOT / "environments.json")
-    demo = found["demo"]
-    assert demo.remote and demo.remote.url == "https://demo.unizo.ai/mcp" and demo.remote.client_id
-    assert envs.parse_file(REPO_ROOT / "environments.example.json")["ci"].remote is None
-
-
-def test_user_file_overrides_bundled_entry(isolated_config: Path, user_file: Path) -> None:
-    write(isolated_config / "plugin" / "environments.json", {"staging": PROD, "demo": PROD})
-    found = envs.load_environments()
-    assert sorted(found) == ["demo", "prod", "staging"]
-    assert found["staging"].settings["api_url"] == STAGING["api_url"]
-    assert found["staging"].source == user_file
-
-
-def test_custom_file_location(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    custom = write(tmp_path / "team" / "unizo-ctem-envs.json", {"qa": PROD})
-    monkeypatch.setenv("UNIZO_CTEM_ENVIRONMENTS_FILE", str(custom))
-    assert list(envs.load_environments()) == ["qa"]
 
 
 @pytest.mark.parametrize(
@@ -146,12 +123,12 @@ def test_plugin_options_apply_when_no_environment_is_active(monkeypatch: pytest.
 
 
 def test_active_environment_replaces_every_plugin_option(
-    monkeypatch: pytest.MonkeyPatch, user_file: Path
+    monkeypatch: pytest.MonkeyPatch, env_file: Path
 ) -> None:
     plugin_options(monkeypatch)
-    envs.use("staging", run=FakeClaude(), out=lambda _: None)
+    envs.use("staging", file=env_file, run=FakeClaude(), out=lambda _: None)
     s = Settings.from_env()
-    assert s.environment == "staging" and s.environment_source == str(user_file)
+    assert s.environment == "staging" and s.environment_source == str(env_file)
     assert s.api_url == "https://ctem-staging.acme.com"
     assert s.oidc.issuer == STAGING["sso_issuer"] and s.oidc.client_id == "0oa-staging"
     # Nothing carries over from the old options: unset keys fall back to defaults, and the token isn't sent.
@@ -160,43 +137,51 @@ def test_active_environment_replaces_every_plugin_option(
 
 
 def test_plugin_secrets_only_when_the_environment_opts_in(
-    monkeypatch: pytest.MonkeyPatch, isolated_config: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     plugin_options(monkeypatch)
-    write(isolated_config / "config" / "unizo-ctem-mcp" / "environments.json",
-          {"ci": {"api_url": "https://ctem.acme.com", "use_env_secrets": True}})
-    envs.use("ci", run=FakeClaude(), out=lambda _: None)
+    env_file = write(tmp_path / "e.json", {"ci": {"api_url": "https://ctem.acme.com", "use_env_secrets": True}})
+    envs.use("ci", file=env_file, run=FakeClaude(), out=lambda _: None)
     s = Settings.from_env()
     assert s.api_token == "old-token" and s.auth_mode == "static-token"
 
 
 def test_old_use_plugin_secrets_key_still_works(
-    monkeypatch: pytest.MonkeyPatch, isolated_config: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     plugin_options(monkeypatch)
-    write(isolated_config / "config" / "unizo-ctem-mcp" / "environments.json",
-          {"ci": {"api_url": "https://ctem.acme.com", "use_plugin_secrets": True}})
-    envs.use("ci", run=FakeClaude(), out=lambda _: None)
+    env_file = write(tmp_path / "e.json", {"ci": {"api_url": "https://ctem.acme.com", "use_plugin_secrets": True}})
+    envs.use("ci", file=env_file, run=FakeClaude(), out=lambda _: None)
     assert Settings.from_env().api_token == "old-token"
 
 
 def test_missing_active_environment_is_reported_not_fatal(
-    monkeypatch: pytest.MonkeyPatch, user_file: Path
+    monkeypatch: pytest.MonkeyPatch, env_file: Path
 ) -> None:
     plugin_options(monkeypatch)
-    envs.use("prod", run=FakeClaude(), out=lambda _: None)
-    write(user_file, {"staging": STAGING})  # prod deleted from the file
+    envs.use("prod", file=env_file, run=FakeClaude(), out=lambda _: None)
+    write(env_file, {"staging": STAGING})  # prod deleted from the file
     s = Settings.from_env()
     assert s.environment == "" and s.api_url == "https://old.example.com"
     assert any('"prod" is no longer' in p for p in s.problems)
 
 
+def test_deleted_environments_file_is_reported_not_fatal(
+    monkeypatch: pytest.MonkeyPatch, env_file: Path
+) -> None:
+    plugin_options(monkeypatch)
+    envs.use("prod", file=env_file, run=FakeClaude(), out=lambda _: None)
+    env_file.unlink()
+    s = Settings.from_env()
+    assert s.environment == "" and any("is missing" in p for p in s.problems)
+
+
 # ── Switching ──
 
 
-def test_use_registers_the_remote_server_with_its_client_id(user_file: Path) -> None:
+def test_use_registers_the_remote_server_with_its_client_id(env_file: Path) -> None:
     claude = FakeClaude()
-    envs.use("staging", run=claude, out=lambda _: None)
+    envs.use("staging", file=env_file, run=claude, out=lambda _: None)
     assert claude.servers["unizo-ctem-cloud"] == {
         "type": "http",
         "url": "https://ctem-staging.acme.com/mcp",
@@ -207,72 +192,72 @@ def test_use_registers_the_remote_server_with_its_client_id(user_file: Path) -> 
     assert envs.read_state()["name"] == "staging"
 
 
-def test_switching_signs_out_the_old_remote_and_replaces_it(user_file: Path) -> None:
+def test_switching_signs_out_the_old_remote_and_replaces_it(env_file: Path) -> None:
     claude = FakeClaude()
-    envs.use("staging", run=claude, out=lambda _: None)
+    envs.use("staging", file=env_file, run=claude, out=lambda _: None)
     claude.calls.clear()
-    envs.use("prod", run=claude, out=lambda _: None)
+    envs.use("prod", file=env_file, run=claude, out=lambda _: None)
     assert claude.subcommands() == ["get", "logout", "remove", "add-json"]
     assert claude.servers["unizo-ctem-cloud"]["oauth"] == {"clientId": "mcp-prod"}
 
 
-def test_reapplying_the_same_environment_keeps_the_remote_sign_in(user_file: Path) -> None:
+def test_reapplying_the_same_environment_keeps_the_remote_sign_in(env_file: Path) -> None:
     claude = FakeClaude()
-    envs.use("staging", run=claude, out=lambda _: None)
+    envs.use("staging", file=env_file, run=claude, out=lambda _: None)
     claude.calls.clear()
-    envs.use("staging", run=claude, out=lambda _: None)
+    envs.use("staging", file=env_file, run=claude, out=lambda _: None)
     assert "logout" not in claude.subcommands()
 
 
-def test_environment_without_remote_removes_it(isolated_config: Path, user_file: Path) -> None:
+def test_environment_without_remote_removes_it(isolated_config: Path, env_file: Path) -> None:
     claude = FakeClaude()
-    envs.use("staging", run=claude, out=lambda _: None)
-    write(user_file, {"staging": STAGING, "local": {"api_url": "http://127.0.0.1:9401"}})
-    envs.use("local", run=claude, out=lambda _: None)
+    envs.use("staging", file=env_file, run=claude, out=lambda _: None)
+    write(env_file, {"staging": STAGING, "local": {"api_url": "http://127.0.0.1:9401"}})
+    envs.use("local", file=env_file, run=claude, out=lambda _: None)
     assert "unizo-ctem-cloud" not in claude.servers
     assert envs.read_state()["remote_registered"] is False
 
 
-def test_wont_replace_a_server_it_did_not_add(user_file: Path) -> None:
+def test_wont_replace_a_server_it_did_not_add(env_file: Path) -> None:
     claude = FakeClaude({"unizo-ctem-cloud": {"type": "http", "url": "https://someone-elses/mcp"}})
     with pytest.raises(envs.EnvConfigError, match="already exists"):
-        envs.use("staging", run=claude, out=lambda _: None)
+        envs.use("staging", file=env_file, run=claude, out=lambda _: None)
     assert claude.servers["unizo-ctem-cloud"]["url"] == "https://someone-elses/mcp"
-    envs.use("staging", force=True, run=claude, out=lambda _: None)
+    envs.use("staging", file=env_file, force=True, run=claude, out=lambda _: None)
     assert claude.servers["unizo-ctem-cloud"]["url"] == "https://ctem-staging.acme.com/mcp"
 
 
-def test_unknown_environment(user_file: Path) -> None:
-    with pytest.raises(envs.EnvConfigError, match="Available: prod, staging"):
-        envs.use("qa", run=FakeClaude(), out=lambda _: None)
+def test_unknown_environment(env_file: Path) -> None:
+    with pytest.raises(envs.EnvConfigError, match=r"Available: prod, staging in .*acme\.json"):
+        envs.use("qa", file=env_file, run=FakeClaude(), out=lambda _: None)
     assert envs.read_state() is None
 
 
-def test_add_failure_is_reported_and_state_unchanged(user_file: Path) -> None:
+def test_add_failure_is_reported_and_state_unchanged(env_file: Path) -> None:
     def failing(args: list[str]) -> subprocess.CompletedProcess[str]:
         if args[2] == "add-json":
             return subprocess.CompletedProcess(args, 1, "", "Invalid configuration")
         return subprocess.CompletedProcess(args, 1, "", "not found")
 
     with pytest.raises(envs.EnvConfigError, match="Invalid configuration"):
-        envs.use("staging", run=failing, out=lambda _: None)
+        envs.use("staging", file=env_file, run=failing, out=lambda _: None)
     assert envs.read_state() is None
 
 
-def test_off_restores_plugin_options_and_removes_remote(monkeypatch: pytest.MonkeyPatch, user_file: Path) -> None:
+def test_off_restores_plugin_options_and_removes_remote(monkeypatch: pytest.MonkeyPatch, env_file: Path) -> None:
     plugin_options(monkeypatch)
     claude = FakeClaude()
-    envs.use("staging", run=claude, out=lambda _: None)
+    envs.use("staging", file=env_file, run=claude, out=lambda _: None)
     envs.off(run=claude, out=lambda _: None)
     assert "unizo-ctem-cloud" not in claude.servers and envs.read_state() is None
     assert Settings.from_env().api_url == "https://old.example.com"
 
 
-def test_cli_list_marks_active(user_file: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    assert envs.cli(["list"]) == 0
+def test_cli_list_marks_active(env_file: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert envs.cli(["list", "--file", str(env_file)]) == 0
     assert "* " not in capsys.readouterr().out
-    envs.use("prod", run=FakeClaude(), out=lambda _: None)
-    envs.cli(["list"])
+    envs.use("prod", file=env_file.resolve(), run=FakeClaude(), out=lambda _: None)
+    envs.cli(["list", "--file", str(env_file)])
     lines = capsys.readouterr().out.splitlines()
     assert any(line.startswith("* prod") for line in lines) and any(line.startswith("  staging") for line in lines)
 
@@ -280,21 +265,30 @@ def test_cli_list_marks_active(user_file: Path, capsys: pytest.CaptureFixture[st
 def test_cli_usage_and_errors(capsys: pytest.CaptureFixture[str]) -> None:
     assert envs.cli(["frobnicate"]) == 2
     assert "usage: unizo-ctem-mcp env" in capsys.readouterr().err
-    assert envs.cli(["list"]) == 1  # no files at all
-    assert envs.cli(["use", "nope"]) == 1
+    capsys.readouterr()
+
+
+def test_list_and_use_need_a_file(env_file: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """There is no default environments file, not even when one exists in the config folder."""
+    write(env_file.parent.parent / "config" / "unizo-ctem-mcp" / "environments.json", {"staging": STAGING})
+    assert envs.cli(["list"]) == 1
+    assert "list needs --file" in capsys.readouterr().err
+    assert envs.cli(["use", "staging"]) == 1
+    assert "use needs --file" in capsys.readouterr().err
+    assert envs.read_state() is None
+    assert envs.cli(["use", "nope", "--file", str(env_file)]) == 1
     assert 'No environment named "nope"' in capsys.readouterr().err
 
 
 # ── --file: environments from a file the user names ──
 
 
-def test_use_with_file_reads_only_that_file(tmp_path: Path, user_file: Path) -> None:
+def test_use_with_file_reads_only_that_file(tmp_path: Path, env_file: Path) -> None:
     custom = write(tmp_path / "elsewhere" / "acme.json", {"qa": PROD})
     fake = FakeClaude()
     env = envs.use("qa", file=custom, run=fake, out=lambda _: None)
     assert env.source == custom
     assert fake.servers["unizo-ctem-cloud"]["url"] == PROD["remote_mcp"]["url"]
-    # The default files don't define "qa", but the active environment is still found through its source file.
     assert envs.active_environment().name == "qa"
     with pytest.raises(envs.EnvConfigError, match=r'No environment named "staging".*acme\.json'):
         envs.use("staging", file=custom, run=fake, out=lambda _: None)
@@ -328,14 +322,14 @@ def test_cli_file_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> 
 # ── Setup completion ──
 
 
-def test_setup_done_is_recorded_and_reset_by_the_next_switch(user_file: Path) -> None:
+def test_setup_done_is_recorded_and_reset_by_the_next_switch(env_file: Path) -> None:
     claude = FakeClaude()
-    envs.use("staging", run=claude, out=lambda _: None)
+    envs.use("staging", file=env_file, run=claude, out=lambda _: None)
     assert not envs.read_state().get("setup_complete")
     assert envs.cli(["setup-done"]) == 0
     state = envs.read_state()
     assert state["setup_complete"] is True and state["name"] == "staging" and state["remote_registered"] is True
-    envs.use("prod", run=claude, out=lambda _: None)
+    envs.use("prod", file=env_file, run=claude, out=lambda _: None)
     assert not envs.read_state().get("setup_complete")
 
 

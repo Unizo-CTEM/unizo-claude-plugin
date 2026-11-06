@@ -29,7 +29,7 @@ the plans Unizo drafted, and commit a sound one. All calls go to the **`unizo-ct
 ### 1. Orient
 Call `get_my_context`. Note the user's `user.id` (needed for "mine"), check that the W1 tools are in
 `tools.available`, and stop with the refusal reason if any are in `tools.refused`. If `unizo-ctem-cloud` is missing
-or unauthenticated, tell the user to run `/unizo-ctem:unizo-ctem-setup <env>` and authenticate it from `/mcp`.
+or unauthenticated, tell the user to run `/unizo-ctem:unizo-ctem-plugin-configure <environments.json> <env>` and authenticate it from `/mcp`.
 
 ### 2. Build the queue
 Pick the recipe from what the user asked (default: mine first, then unclaimed):

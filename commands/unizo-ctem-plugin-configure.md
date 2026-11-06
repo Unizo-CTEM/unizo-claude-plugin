@@ -1,6 +1,6 @@
 ---
 description: Set up the CTEM plugin end to end - pick an environment from your environments.json, and sign in once (SSO) for both the gateway and the unizo-ctem-cloud MCP server
-argument-hint: "[<path-to-environments.json> | <environment name>]"
+argument-hint: "<path-to-environments.json> [<environment name>]"
 allowed-tools: Bash(uv run --quiet --project ${CLAUDE_PLUGIN_ROOT}/mcp-server unizo-ctem-mcp env:*), Bash(uv run --quiet --project ${CLAUDE_PLUGIN_ROOT}/mcp-server unizo-ctem-mcp login)
 ---
 
@@ -12,7 +12,8 @@ spans two sessions; after the restart, the session-start hook has Claude run thi
 user's first message, and it only checks that everything is connected. Say where you are as you go
 ("Step 1 of 2: environment and sign-in").
 
-Arguments: `$ARGUMENTS` (optional: a path to an environments file, or the name of an environment to switch to)
+Arguments: `$ARGUMENTS`: the path to the user's environments file, optionally followed by the name of the environment
+to switch to. There is no default environments file: never fall back to one, always use the file the user names.
 
 Never ask the user to paste tokens or secrets into the chat; secrets belong in environment variables.
 
@@ -23,7 +24,7 @@ server needs `uv` on the `PATH`) and restart Claude Code, then stop.
 
 Do step 1 if **any** of these is true; otherwise go to step 2:
 
-- `$ARGUMENTS` is set (an environments file or an environment name: the user wants to pick or switch), or
+- `$ARGUMENTS` is set (an environments file, maybe with a name: the user wants to pick or switch), or
 - `environment` is not set **and** `api_url` is empty (nothing configured yet).
 
 If `environment` is not set but `api_url` is configured, the user set `UNIZO_CTEM_*` environment variables and doesn't
@@ -31,27 +32,24 @@ need an environment: go to step 2 (there is no remote server).
 
 ## 1. Environment and sign-in (first session)
 
-Environments are defined in JSON files: the one shipped with the plugin, plus the user's own
-`~/.config/unizo-ctem-mcp/environments.json` (or `$UNIZO_CTEM_ENVIRONMENTS_FILE`). Below, `env` is short for
-`uv run --quiet --project ${CLAUDE_PLUGIN_ROOT}/mcp-server unizo-ctem-mcp env`, run with the Bash tool.
+Environments are defined in a JSON file the user names; the plugin ships none and reads none by default. Below,
+`env` is short for `uv run --quiet --project ${CLAUDE_PLUGIN_ROOT}/mcp-server unizo-ctem-mcp env`, run with the Bash
+tool.
 
 1. Get the environments file:
-   - If `$ARGUMENTS` is an environment name (no `/` and no `.json` ending), skip to sub-step 3 with that name and
-     no `--file`.
-   - If `$ARGUMENTS` is a path, use it.
-   - Otherwise ask with AskUserQuestion: *"Where is your CTEM environments.json file? Choose Other to type its
-     path (for example ~/Downloads/environments.json)."* Options: **Bundled environments** ("The demo
-     environments shipped with the plugin") and **My config file** ("~/.config/unizo-ctem-mcp/environments.json").
-     A typed path is the answer most users give.
-2. List the environments with `env list --file <path>`, or `env list` for **Bundled environments** / **My config
-   file** (it reads both by default). Ask the user which one to use with AskUserQuestion: one option per environment
-   (name as the label, gateway URL and description as the description; up to 4 options, the user can type any other
-   name). If the file holds a single environment, still confirm before switching.
-3. Switch with `env use <name>` (add `--file <path>` if you listed with one). This also registers the remote server
+   - If `$ARGUMENTS` starts with a path, use it. If a second word follows, that's the environment name: skip to
+     sub-step 3 with it.
+   - Otherwise ask the user for the path in a short message, and end your turn until they reply: *"Which CTEM
+     environments file should I use? Send its path (for example ~/Downloads/environments.json), or run
+     `/unizo-ctem:unizo-ctem-plugin-configure <path>`."* Don't guess a path, and don't look for one on disk.
+2. List the environments with `env list --file <path>`. Ask the user which one to use with AskUserQuestion: one
+   option per environment (name as the label, gateway URL and description as the description; up to 4 options, the
+   user can type any other name). If the file holds a single environment, still confirm before switching.
+3. Switch with `env use <name> --file <path>`. This also registers the remote server
    `unizo-ctem-cloud`. Report the gateway, SSO issuer and remote MCP URL + client ID now in effect. Switching signs
    the remote server out whenever its URL or client ID changes; that's expected. On an error, show it verbatim and:
-   - No environments file, or the name is unknown: explain the file format with this example and offer to create
-     the user's `~/.config/unizo-ctem-mcp/environments.json`, then stop.
+   - The file is missing or invalid, or the name is unknown: explain the file format with this example and offer to
+     create a file where the user chooses, then stop.
 
      ```json
      {
@@ -120,8 +118,8 @@ Run `uv run --quiet --project ${CLAUDE_PLUGIN_ROOT}/mcp-server unizo-ctem-mcp en
 - **Only `mcp__unizo-ctem-cloud__authenticate`** (and `complete_authentication`): the server didn't accept or didn't
   get the gateway token. If you just signed in in step 2, the reconnect above fixes it. Otherwise, possible causes:
   this folder isn't trusted yet (Claude Code skips `headersHelper` in untrusted folders; trust it and restart), or
-  `remote_mcp` in the environment didn't record a `headersHelper` (switch again with `/unizo-ctem:unizo-ctem-setup
-  <name>` and restart). As a last resort, call `mcp__unizo-ctem-cloud__authenticate` and show the URL it returns;
+  `remote_mcp` in the environment didn't record a `headersHelper` (switch again with `/unizo-ctem:unizo-ctem-plugin-configure
+  <path> <name>` and restart). As a last resort, call `mcp__unizo-ctem-cloud__authenticate` and show the URL it returns;
   the SSO session from the gateway sign-in usually means one click, no password. If the browser can't reach the
   local callback, pass the URL they landed on to `mcp__unizo-ctem-cloud__complete_authentication`.
 - **No `unizo-ctem-cloud` tools at all**: the server isn't loaded. Ask the user to open `/mcp` → `unizo-ctem-cloud`
@@ -137,7 +135,7 @@ uv run --quiet --project ${CLAUDE_PLUGIN_ROOT}/mcp-server unizo-ctem-mcp env set
 ```
 
 (Skip this when no environment is active.) Then tell the user setup is complete, who they're signed in as, and that
-they can switch environments later with `/unizo-ctem:unizo-ctem-setup <path>` or `/unizo-ctem:unizo-ctem-setup <name>`.
+they can switch environments later with `/unizo-ctem:unizo-ctem-plugin-configure <path> [<name>]`.
 To turn environments off, run `env off` and restart.
 Then go back to what the user asked in their message, if anything. Suggest `/unizo-ctem:unizo-ctem-queue` as a
 first thing to try.
