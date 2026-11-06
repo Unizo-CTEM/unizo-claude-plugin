@@ -8,14 +8,14 @@ see [SETUP_AND_TESTING.md](SETUP_AND_TESTING.md).
 
 ```
 plugin:unizo-ctem:unizo-ctem   →  local process (uv run unizo-ctem-mcp) →  CTEM gateway API   [part of the plugin]
-unizo-ctem-cloud         →  https://<env>/mcp               (direct, OAuth)      [registered by /unizo-ctem:unizo-ctem-env, runs on its own]
+unizo-ctem-cloud         →  https://<env>/mcp               (direct, OAuth)      [registered by /unizo-ctem:unizo-ctem-setup, runs on its own]
 ```
 
 - **`plugin:unizo-ctem:unizo-ctem`** is the plugin's local stdio server. It has only `unizo_ctem_status`, `unizo_ctem_login`, and
   `unizo_ctem_logout`, and signs in to the gateway with SSO.
-- **`unizo-ctem-cloud`** is the remote CTEM MCP server, where the CTEM tools are. `/unizo-ctem:unizo-ctem-env use <name>` adds it to
+- **`unizo-ctem-cloud`** is the remote CTEM MCP server, where the CTEM tools are. `/unizo-ctem:unizo-ctem-setup <name>` adds it to
   your Claude Code **user** config (`~/.claude.json`). After that, Claude Code connects to it directly. Calls don't
-  go through the plugin. It stays registered even if the plugin is turned off, until `/unizo-ctem:unizo-ctem-env off` or
+  go through the plugin. It stays registered even if the plugin is turned off, until `unizo-ctem-mcp env off` or
   `claude mcp remove unizo-ctem-cloud -s user`.
 - A claude.ai connector for the same backend (for example **Unizo CTEM DEV52**) is a separate server that has
   nothing to do with the plugin. Turn it off while testing so you know which tools you're calling.
@@ -69,15 +69,14 @@ To test the GitHub install path instead: `/plugin marketplace add Unizo-CTEM/cte
 
 Start `claude`, then:
 
-1. `/unizo-ctem:unizo-ctem-hello` lists the commands, skill, agent, and MCP server.
-2. `/mcp` shows `plugin:unizo-ctem:unizo-ctem` as **connected**, with tools `unizo_ctem_status`, `unizo_ctem_login`, and `unizo_ctem_logout`.
-3. `/unizo-ctem:unizo-ctem-setup` reports that no API URL is configured and suggests `/unizo-ctem:unizo-ctem-env`. That's expected with
-   nothing set up.
+1. `/mcp` shows `plugin:unizo-ctem:unizo-ctem` as **connected**, with tools `unizo_ctem_status`, `unizo_ctem_login`, and `unizo_ctem_logout`.
+2. `/unizo-ctem:unizo-ctem-setup` asks where your environments file is. That's expected with nothing set up; continue
+   with step 4.
 
 ## Step 4: Pick the first environment (demo)
 
-1. `/unizo-ctem:unizo-ctem-env` lists `demo` and `dev52`, with neither active.
-2. `/unizo-ctem:unizo-ctem-env use demo` reports the gateway, SSO issuer, and remote MCP URL.
+1. `/unizo-ctem:unizo-ctem-setup`, choose **Bundled environments**. It lists `demo` and `dev52` and asks which to use.
+2. Pick `demo`. It reports the gateway, SSO issuer, and remote MCP URL.
 3. **Restart Claude Code.**
 
 ## Step 5: Gateway login (local plugin server)
@@ -94,7 +93,7 @@ Start `claude`, then:
 
 ## Step 7: Switch to dev52
 
-1. `/unizo-ctem:unizo-ctem-env use dev52`
+1. `/unizo-ctem:unizo-ctem-setup dev52`
 2. **Restart Claude Code.**
 3. `/unizo-ctem:unizo-ctem-setup` shows the API URL `https://dev52.unizo.ai`. Sign in again when asked. Each realm has its own
    login.
@@ -104,8 +103,8 @@ Start `claude`, then:
 
 ## Step 8: Switch back and turn off
 
-1. `/unizo-ctem:unizo-ctem-env use demo`, restart, and confirm that `/unizo-ctem:unizo-ctem-setup` shows demo again.
-2. `/unizo-ctem:unizo-ctem-env off`, restart. `unizo-ctem-cloud` is gone from `/mcp`, and `/unizo-ctem:unizo-ctem-setup` is back to "not
+1. `/unizo-ctem:unizo-ctem-setup demo`, restart, and confirm that `/unizo-ctem:unizo-ctem-setup` shows demo again.
+2. `uv run --quiet --project mcp-server unizo-ctem-mcp env off` in a terminal, restart. `unizo-ctem-cloud` is gone from `/mcp`, and `/unizo-ctem:unizo-ctem-setup` is back to "not
    configured".
 
 ## Step 9: Check the other plugin pieces
@@ -115,7 +114,7 @@ Start `claude`, then:
 ## Useful commands
 
 ```bash
-# Environment switcher from a terminal (same as /unizo-ctem:unizo-ctem-env)
+# Environment switcher from a terminal (what /unizo-ctem:unizo-ctem-setup runs)
 uv run --quiet --project mcp-server unizo-ctem-mcp env [list | current | use <name> [--force] | off]
 
 # Inspect or recreate the remote server registration

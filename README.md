@@ -12,15 +12,13 @@ and switching between environments.
 
 | Type | Name | Purpose |
 |---|---|---|
-| Command | `/unizo-ctem:unizo-ctem-setup [<environments.json>]` | Guided setup: pick an environment from your environments file, then one SSO sign-in for both the gateway and the `unizo-ctem-cloud` MCP server |
-| Command | `/unizo-ctem:unizo-ctem-env` | List environments (demo, staging, prod, ...) and switch between them |
-| Command | `/unizo-ctem:unizo-ctem-hello` | Check that the plugin is installed and list what it provides |
+| Command | `/unizo-ctem:unizo-ctem-setup [<environments.json> \| <name>]` | Guided setup: pick or switch an environment (from your environments file or by name), then one SSO sign-in for both the gateway and the `unizo-ctem-cloud` MCP server |
 | Command | `/unizo-ctem:unizo-ctem-queue` | Work your review queue (W1): Investigations awaiting review, mine or unclaimed, `crown`, `kev` |
 | Skill | `unizo-ctem-review-queue` | W1 end to end: queue → claim → review plans → `preview_commit` → `commit_actions`, confirming every write |
 | Hook | `unizo_ctem_guard` | On `unizo-ctem-cloud` tools: blocks `move_ticket` / `set_jira_assignee`, refuses `commit_actions` without a recent matching `preview_commit`, asks before every write, audits writes to `~/.config/unizo-ctem-mcp/audit.jsonl` |
 | Agent | `exposure-triage` | Triages a finding and recommends a priority and next step |
 | MCP server | `unizo-ctem` | Local server (stdio) that calls your CTEM gateway, with SSO sign-in |
-| MCP server | `unizo-ctem-cloud` | Remote CTEM MCP server, registered by the active environment (`/unizo-ctem:unizo-ctem-env use demo` for `https://demo.unizo.ai/mcp`) |
+| MCP server | `unizo-ctem-cloud` | Remote CTEM MCP server, registered by the active environment (`/unizo-ctem:unizo-ctem-setup demo` for `https://demo.unizo.ai/mcp`) |
 
 ## Install
 
@@ -97,9 +95,9 @@ switch with one command. Each environment sets the gateway and SSO values for th
 **remote MCP server URL and OAuth client ID** for `unizo-ctem-cloud`.
 
 ```
-/unizo-ctem:unizo-ctem-env                 # list; * marks the active one
-/unizo-ctem:unizo-ctem-env use staging     # switch, then restart Claude Code
-/unizo-ctem:unizo-ctem-env off             # back to UNIZO_CTEM_* environment variables
+/unizo-ctem:unizo-ctem-setup ~/acme-envs.json   # pick from a file, then restart Claude Code
+/unizo-ctem:unizo-ctem-setup staging           # switch by name, then restart Claude Code
+uv run --project <plugin-dir>/mcp-server unizo-ctem-mcp env off   # back to UNIZO_CTEM_* environment variables
 ```
 
 The plugin ships [`environments.json`](environments.json) with `demo`. Add your own in

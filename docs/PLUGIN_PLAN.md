@@ -165,7 +165,7 @@ Example for hook 1:
 6. **W3 skill**, once `findingsIntake` is switched on.
 7. **Optional Stop hook** for vocabulary.
 
-Test each step against dev52 with `/unizo-ctem:unizo-ctem-env use dev52`. The procedures are in `docs/DEV_GUIDE.md`.
+Test each step against dev52 with `/unizo-ctem:unizo-ctem-setup dev52`. The procedures are in `docs/DEV_GUIDE.md`.
 
 ---
 

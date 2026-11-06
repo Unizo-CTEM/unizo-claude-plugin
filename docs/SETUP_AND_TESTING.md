@@ -21,7 +21,7 @@ Claude Code
  │     └── HTTPS + Bearer token  ──►  your CTEM gateway  (api_url)
  └── unizo-ctem-cloud  (remote MCP server, HTTP)  ──►  remote_mcp.url of the active environment
 
- ~/.config/unizo-ctem-mcp/environments.json  ──►  /unizo-ctem:unizo-ctem-env use <name>  picks the environment for both
+ ~/.config/unizo-ctem-mcp/environments.json  ──►  /unizo-ctem:unizo-ctem-setup <name>  picks the environment for both
 ```
 
 - **`unizo-ctem`** runs on your machine. It signs you in through your company SSO (or uses a static API token) and calls
@@ -30,8 +30,8 @@ Claude Code
   `https://demo.unizo.ai/mcp`). Claude Code handles its sign-in.
 - **Environments** ([2.7](#27-environments-switching-between-deployments)) bundle the gateway, SSO and remote
   server URL + client ID per deployment, so you can switch with one command.
-- **Commands:** `/unizo-ctem:unizo-ctem-setup` (check the connection and walk through setup), `/unizo-ctem:unizo-ctem-env` (list and
-  switch environments) and `/unizo-ctem:unizo-ctem-hello` (list what the plugin provides). **Skill:** `unizo-ctem-review-queue`. **Agent:** `exposure-triage`.
+- **Commands:** `/unizo-ctem:unizo-ctem-setup` (pick or switch an environment, sign in, check the connection) and
+  `/unizo-ctem:unizo-ctem-queue` (work your review queue). **Skill:** `unizo-ctem-review-queue`. **Agent:** `exposure-triage`.
 
 ---
 
@@ -141,7 +141,7 @@ The remote server comes from the active environment's `remote_mcp` block ([2.7](
 If no environment is active, there's no remote server. Start with the shipped one:
 
 ```
-/unizo-ctem:unizo-ctem-env use demo
+/unizo-ctem:unizo-ctem-setup demo
 ```
 
 `demo` points at `https://demo.unizo.ai/mcp`. Its sign-in uses the Keycloak realm `https://demo.unizo.ai/realms/ctem`
@@ -153,23 +153,24 @@ with the pre-registered public client `dW5pem8tbWNwLWNsaWVudA==`.
 
 Why the plugin doesn't ship `unizo-ctem-cloud` in its `.mcp.json`: Claude Code reads a remote server's `oauth.clientId`
 literally. It doesn't substitute `${ENV_VAR}` there (verified with Claude Code 2.1.318), so a
-variable can't set the client ID. `/unizo-ctem:unizo-ctem-env use` registers the server at user scope with
+variable can't set the client ID. `unizo-ctem-mcp env use` (which setup runs) registers the server at user scope with
 `claude mcp add-json`, which takes a literal client ID.
 
 ### 2.7 Environments: switching between deployments
 
 An environment names one deployment: the gateway and SSO settings for the local `unizo-ctem` server, and the URL and OAuth
-client ID of the remote MCP server. Switch with:
+client ID of the remote MCP server. In Claude Code, `/unizo-ctem:unizo-ctem-setup <environments.json>` or
+`/unizo-ctem:unizo-ctem-setup <name>` picks one. From a terminal, run
+`uv run --project <plugin-dir>/mcp-server unizo-ctem-mcp env ...`:
 
 | Command | Does |
 |---|---|
-| `/unizo-ctem:unizo-ctem-env` (or `list`) | Lists environments; `*` marks the active one |
-| `/unizo-ctem:unizo-ctem-env use <name>` | Makes `<name>` active and registers its remote server as `unizo-ctem-cloud` |
-| `/unizo-ctem:unizo-ctem-env current` | Shows the active environment and where it's defined |
-| `/unizo-ctem:unizo-ctem-env off` | Goes back to the `UNIZO_CTEM_*` environment variables and removes the `unizo-ctem-cloud` it added |
+| `env list` | Lists environments; `*` marks the active one |
+| `env use <name>` | Makes `<name>` active and registers its remote server as `unizo-ctem-cloud` |
+| `env current` | Shows the active environment and where it's defined |
+| `env off` | Goes back to the `UNIZO_CTEM_*` environment variables and removes the `unizo-ctem-cloud` it added |
 
-Restart Claude Code after `use` or `off`. From a terminal, the same commands are
-`uv run --project <plugin-dir>/mcp-server unizo-ctem-mcp env ...`.
+Restart Claude Code after `use` or `off`.
 
 **Files**, read in order. A later file replaces an earlier file's entry with the same name.
 
@@ -311,7 +312,7 @@ Send an environments file. Users save it as `~/.config/unizo-ctem-mcp/environmen
 }
 ```
 
-Then they run `/unizo-ctem:unizo-ctem-env use acme` and restart Claude Code. Without environments, `UNIZO_CTEM_*` environment
+Then they run `/unizo-ctem:unizo-ctem-setup acme` and restart Claude Code. Without environments, `UNIZO_CTEM_*` environment
 variables still work ([2.3](#23-with-environment-variables-no-environments-file)). That route has no remote server.
 
 ---
@@ -453,21 +454,20 @@ The server inherits the `CTEM_*` variables exported in that shell.
 |---|---|---|
 | C1 | `/mcp` | `unizo-ctem` connected; `unizo-ctem-cloud` "Needs authentication" |
 | C1b | `/mcp` → `unizo-ctem-cloud` → **Authenticate** | Browser opens the `demo.unizo.ai` Keycloak sign-in; after signing in, `unizo-ctem-cloud` shows connected and lists its tools |
-| C2 | `/unizo-ctem:unizo-ctem-hello` | Confirms the plugin is active and lists its commands, skill and agent |
 | C3 | `/unizo-ctem:unizo-ctem-setup` | `unizo_ctem_status` → `unizo_ctem_login` (browser tab: "Logged in to Unizo CTEM") → `unizo_ctem_status` with `reachable: true` |
 | C4 | "Who am I signed in as in CTEM?" | `analyst@example.com` |
 | C5 | Run `curl -X POST 127.0.0.1:9400/admin/revoke-all` in a terminal, then ask "Check my CTEM connection" | Claude reports you're signed out and offers to sign in (or does it) |
 | C6 | "Sign me out of CTEM" | `unizo_ctem_logout`; a follow-up status shows signed out |
 | C8 | Paste a CVE finding: "triage this" | The `exposure-triage` agent gives a priority and next step |
 | C9 | `export UNIZO_CTEM_OIDC_TOKEN_TYPE=jwt`, restart Claude Code, `/unizo-ctem:unizo-ctem-setup` | Claude lists the config problem |
-| C10 | Put a `local` environment (`api_url` `http://127.0.0.1:9401`, `sso_issuer` `http://127.0.0.1:9400`, `sso_client_id` `ctem-plugin-test`, `remote_mcp` for demo) in `~/.config/unizo-ctem-mcp/environments.json`, run `/unizo-ctem:unizo-ctem-env use local`, then `use demo`, restarting each time | `unizo_ctem_status` shows `environment` changing; `claude mcp get unizo-ctem-cloud` shows the right URL; `/mcp` asks you to sign in to `unizo-ctem-cloud` again after each switch |
+| C10 | Put a `local` environment (`api_url` `http://127.0.0.1:9401`, `sso_issuer` `http://127.0.0.1:9400`, `sso_client_id` `ctem-plugin-test`, `remote_mcp` for demo) in `~/.config/unizo-ctem-mcp/environments.json`, run `/unizo-ctem:unizo-ctem-setup local`, then `/unizo-ctem:unizo-ctem-setup demo`, restarting each time | `unizo_ctem_status` shows `environment` changing; `claude mcp get unizo-ctem-cloud` shows the right URL; `/mcp` asks you to sign in to `unizo-ctem-cloud` again after each switch |
 
 To test the **no-browser path** interactively, start Claude Code with `BROWSER="/usr/bin/true %s" claude`. Then,
 in C3, Claude shows a sign-in link. Open it in your browser within 10 minutes and ask Claude to check again.
 
 ### 5.5 Headless smoke test through Claude
 
-`mcp-server/tests/e2e/claude_smoke.sh` runs four prompts through `claude -p` against the **installed and configured**
+`mcp-server/tests/e2e/claude_smoke.sh` runs three prompts through `claude -p` against the **installed and configured**
 plugin and prints which tools Claude called, plus its answers. By default it sets `BROWSER` so no real tab opens
 (fine for the fake deployment). This uses your Claude account.
 
@@ -488,7 +488,6 @@ Expected (abridged):
 === 03-relogin: Sign me out of CTEM, then sign me back in.
   tool: unizo_ctem_logout {}
   tool: unizo_ctem_login {...}
-=== 04-hello: /unizo-ctem:unizo-ctem-hello
 ```
 
 Full transcripts (`*.jsonl`) are kept in the output folder. Against a real IdP, run with `FAKE_BROWSER=0` so you
@@ -518,7 +517,7 @@ Do this once per customer environment, with a real user account.
 - [ ] Leave Claude Code open past the access token's lifetime (often 1 hour), then ask "check my CTEM connection".
       It should still be reachable with no new sign-in (the refresh token works).
 - [ ] Revoke the user's session in the IdP admin console, then check again. Claude asks the user to sign in.
-- [ ] `/unizo-ctem:unizo-ctem-env use <customer env>`, restart, then `/mcp` → `unizo-ctem-cloud` → Authenticate → connected, with tools listed.
+- [ ] `/unizo-ctem:unizo-ctem-setup <customer env>`, restart, then `/mcp` → `unizo-ctem-cloud` → Authenticate → connected, with tools listed.
 - [ ] Service-account path: set `api_token` and confirm `auth_mode: static-token` and `reachable: true`.
 
 ### 5.7 Clean up after testing
@@ -543,9 +542,9 @@ name the fix. For lower-level logs, start Claude Code with `claude --debug=mcp`;
 |---|---|---|
 | `plugin:unizo-ctem:unizo-ctem` missing from `claude mcp list` | `api_url` not set, or the plugin was loaded with `--plugin-dir` | Pick an environment with `/unizo-ctem:unizo-ctem-setup` (or export `UNIZO_CTEM_API_URL`), restart. Install via a marketplace, not `--plugin-dir`. |
 | `unizo-ctem` "Failed to connect" | `uv` not on Claude Code's `PATH` | `command -v uv` in a new terminal; fix the `PATH` in your shell profile; restart Claude Code. |
-| No `unizo-ctem-cloud` in `/mcp` | No environment active, or the environment has no `remote_mcp` | `/unizo-ctem:unizo-ctem-env use <name>`, then restart. |
+| No `unizo-ctem-cloud` in `/mcp` | No environment active, or the environment has no `remote_mcp` | `/unizo-ctem:unizo-ctem-setup <name>`, then restart. |
 | "Got new credentials, but ... unizo-ctem-cloud rejected them on reconnect" | Sign-in worked, but the server refuses the token (`401 invalid_token`), usually its audience | Fix on the server side: see [4.3](#43-remote-mcp-server-remote_mcp-in-an-environment). Re-authenticating won't help. |
-| `unizo-ctem-cloud` keeps an old client ID | Cached OAuth client registration | `claude mcp logout unizo-ctem-cloud`, then Authenticate again. `/unizo-ctem:unizo-ctem-env use` does this when the client ID changes. |
+| `unizo-ctem-cloud` keeps an old client ID | Cached OAuth client registration | `claude mcp logout unizo-ctem-cloud`, then Authenticate again. Switching with `/unizo-ctem:unizo-ctem-setup <name>` does this when the client ID changes. |
 | `unizo-ctem-cloud` "Needs authentication" | Not signed in yet | `/mcp` → `unizo-ctem-cloud` → Authenticate. |
 | `unizo-ctem-cloud` Authenticate fails: "client registration" / "Trusted Hosts" / 403 | Keycloak won't let Claude Code register a client | Ask the administrator to allow anonymous client registration, or register a client and set `remote_mcp.client_id` in the environment ([2.7](#27-environments-switching-between-deployments)). |
 | "Could not listen on localhost:8765" | Port in use (often another sign-in still pending) | Close the other process, or set `sso_redirect_port` and register the matching redirect URI. |

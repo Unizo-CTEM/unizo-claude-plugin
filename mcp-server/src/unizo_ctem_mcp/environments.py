@@ -257,7 +257,7 @@ def active_environment() -> Environment | None:
     if name not in envs:
         raise EnvConfigError(
             f'The active CTEM environment "{name}" is no longer in any environments file. '
-            "Run /unizo-ctem:unizo-ctem-env to pick another."
+            "Run /unizo-ctem:unizo-ctem-setup <environments.json> to pick another."
         )
     return envs[name]
 

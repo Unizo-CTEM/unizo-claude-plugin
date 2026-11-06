@@ -50,6 +50,5 @@ EOF
 run 01-setup   "/unizo-ctem:unizo-ctem-setup"
 run 02-status  "Is my CTEM connection healthy? Who am I signed in as?"
 run 03-relogin "Sign me out of CTEM, then sign me back in."
-run 04-hello   "/unizo-ctem:unizo-ctem-hello"
 
 echo "Transcripts: $OUT"
