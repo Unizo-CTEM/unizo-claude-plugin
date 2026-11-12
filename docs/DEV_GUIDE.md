@@ -78,9 +78,16 @@ that's expected. Nothing prompts you to set up: the plugin has no hooks, so you 
 
 ## Step 5: Sign in (`unizo-cloud`)
 
-1. Run `/unizo:unizo-plugin-configure` (no arguments). Claude calls `mcp__unizo-cloud__authenticate`. Open the URL it
-   shows (or let the browser open) and sign in. Doing it by hand also works: `/mcp` → `unizo-cloud` → **Authenticate**.
-2. Claude calls `get_my_context` and reports your demo user and tenant.
+1. Run `/unizo:unizo-plugin-configure` (no arguments). Claude calls `mcp__unizo-cloud__authenticate`, then opens the
+   URL in your default browser with `open` (allow it if asked) and also shows the link.
+2. Sign in. The browser lands on `http://localhost:<port>/callback`, and Claude Code completes the sign-in from that
+   page with no paste needed. Check that `<port>` is the environment's `callback_port`. Tell Claude you're done.
+3. Claude calls `get_my_context` and reports your demo user and tenant.
+
+Doing it by hand also works: `/mcp` → `unizo-cloud` → **Authenticate**. To test the fallback, sign in, close the
+callback tab before it loads (or sign in from another machine), and paste the callback address into the chat: Claude
+passes it to `mcp__unizo-cloud__complete_authentication`. "Invalid redirect_uri" means the Keycloak client doesn't
+allow `http://localhost:<port>/callback`; set `callback_port` in the environments file or register the port.
 
 ## Step 6: Switch to dev52
 

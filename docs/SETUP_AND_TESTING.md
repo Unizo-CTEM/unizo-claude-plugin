@@ -78,8 +78,10 @@ claude plugin install unizo@unizo
 2. Restart Claude Code, then run `/unizo:unizo-plugin-configure <path-to-environments.json>`.
 3. Pick an environment. The command registers `unizo-cloud` for it and asks you to restart.
 4. Restart Claude Code (`claude`, or `claude --continue` to keep the conversation), then run
-   `/unizo:unizo-plugin-configure` again with no arguments. Claude signs you in to `unizo-cloud` (a browser tab opens
-   at your company's sign-in page) and checks the connection with `get_my_context`.
+   `/unizo:unizo-plugin-configure` again with no arguments. Claude signs you in to `unizo-cloud`: it opens your
+   company's sign-in page in your default browser, Claude Code receives the callback on
+   `http://localhost:<port>/callback` once you sign in, and Claude checks the connection with `get_my_context`. On a
+   remote or SSH session, paste the callback page's address into the chat instead.
 
 You can also sign in yourself: `/mcp` → `unizo-cloud` → **Authenticate**.
 

@@ -77,11 +77,25 @@ restart Claude Code and stop. Then look at the tools you have from `unizo-cloud`
 
 - **Unizo tools are available** (for example `mcp__unizo-cloud__get_my_context`): call `get_my_context` and go to
   step 3.
-- **Only `mcp__unizo-cloud__authenticate`** (and `complete_authentication`): it needs a sign-in. Call
-  `mcp__unizo-cloud__authenticate` and show the URL it returns ("your browser should open; if not, use this link").
-  If the browser can't reach the local callback, pass the URL the user landed on to
-  `mcp__unizo-cloud__complete_authentication`. Alternatively the user can open `/mcp` → `unizo-cloud` →
-  **Authenticate**. When they say they're done, call `get_my_context`. Don't call `authenticate` in a loop.
+- **Only `mcp__unizo-cloud__authenticate`** (and `complete_authentication`): it needs a sign-in.
+  1. Call `mcp__unizo-cloud__authenticate`. It returns the sign-in URL and starts Claude Code's listener on
+     `http://localhost:<port>/callback`. It does not open a browser.
+  2. Open that URL in the user's default browser with one Bash call, quoting the URL exactly as returned:
+     `open "<url>"` on macOS, `xdg-open "<url>"` on Linux, `cmd.exe /c start "" "<url>"` on Windows. Skip this
+     step in a remote or SSH session, or when no desktop browser is available (for example `xdg-open` is missing
+     or `$DISPLAY` is unset on Linux).
+  3. Always show the URL too: "A browser tab should open at your sign-in page. If it doesn't, open this link."
+     Tell the user that after they sign in the browser returns to a `http://localhost:<port>/callback` page, and
+     that Claude Code finishes the sign-in by itself when that page loads.
+  4. Wait for the user to say they're done; don't poll. Then call `get_my_context`. If the `unizo-cloud` tools
+     still aren't there, the callback didn't reach Claude Code (typical on a remote machine): ask for the full
+     address from the browser's address bar and pass it to `mcp__unizo-cloud__complete_authentication`.
+
+  If the browser shows "Invalid redirect_uri" or "redirect_uri mismatch", the OAuth client doesn't allow this
+  callback port: say so, and point the user to `remote_mcp.callback_port` in the environments file and their
+  administrator (the client must allow `http://localhost:<port>/callback`). The user can also sign in from
+  `/mcp` → `unizo-cloud` → **Authenticate**, which opens the browser itself. Don't call `authenticate` in a loop:
+  each call starts a new flow and the previous link stops working.
 - **No `unizo-cloud` tools at all**: the server isn't loaded. Ask the user to open `/mcp` → `unizo-cloud` →
   Reconnect (or restart Claude Code if it isn't listed), then run this command again. Stop.
 

@@ -110,8 +110,11 @@ will:
    Code user config;
 2. ask you to restart Claude Code so the server loads (`claude` or `claude --continue`);
 3. after the restart, run `/unizo:unizo-plugin-configure` again (no arguments): it signs you in to `unizo-cloud`
-   through your company's sign-in page (Claude Code's own OAuth, the same as `/mcp` → `unizo-cloud` →
-   **Authenticate**) and checks the connection with `get_my_context`.
+   through your company's sign-in page and checks the connection with `get_my_context`. Claude opens the sign-in
+   page in your default browser (you may be asked to allow the `open` command). After you sign in, the browser
+   returns to `http://localhost:<port>/callback` and Claude Code finishes the sign-in by itself. This is Claude
+   Code's own OAuth, the same as `/mcp` → `unizo-cloud` → **Authenticate**. On a remote or SSH session the
+   callback page can't load: paste its full address into the chat instead.
 
 The plugin asks for nothing during `/plugin install`.
 
@@ -155,7 +158,8 @@ wherever suits you (for example in a repository your team shares). The format:
 |---|---|
 | `remote_mcp.url` | Remote MCP endpoint (`https://`; `http://` only for localhost). Required |
 | `remote_mcp.client_id` | Pre-registered OAuth client ID. Leave it out to use dynamic client registration |
-| `remote_mcp.callback_port`, `remote_mcp.scopes` | Optional OAuth callback port and scopes |
+| `remote_mcp.callback_port` | Pins the local OAuth callback port. Recommended: without it Claude Code picks a random port each time, and the OAuth client must then allow any `localhost` port |
+| `remote_mcp.scopes` | Optional OAuth scopes |
 | `description` | Shown in the list |
 
 Older files may also carry `api_url`, `sso_*` and `use_env_secrets` keys for the local server earlier versions
@@ -168,6 +172,9 @@ How it works:
 - When the URL or client ID changes, the old sign-in is cleared, because Claude Code would otherwise reuse the cached
   OAuth client. Sign in again when asked.
 - The configure command won't replace a `unizo-cloud` server it didn't add without asking you first.
+- The OAuth client must allow the redirect URI `http://localhost:<callback_port>/callback`. If the browser shows
+  "Invalid redirect_uri" after sign-in, the port isn't allowed: set `callback_port` to a port your administrator has
+  registered, and run the configure command again.
 - The active environment is kept in `~/.config/unizo-mcp/active-environment.json`. Restart Claude Code after switching.
 
 From a terminal: `python3 <plugin-dir>/scripts/unizo_env.py [list --file <path> | current | use <name> --file <path> [--force] | off]`.
