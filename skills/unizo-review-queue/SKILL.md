@@ -7,7 +7,7 @@ description: Work the user's Unizo review queue (workflow W1) - list Investigati
 
 The user wants to work through Investigations that are waiting for review: see the queue, take one, understand
 the plans Unizo drafted, and commit a sound one. All calls go to the **`unizo-cloud`** MCP server
-(`mcp__unizo-cloud__*`). The local `unizo` server is only for sign-in (`unizo_status`, `unizo_login`).
+(`mcp__unizo-cloud__*`), which `/unizo:unizo-plugin-configure` registers and the user signs in to through `/mcp`.
 
 ## Ground rules
 
