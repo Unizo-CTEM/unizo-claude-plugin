@@ -1,6 +1,10 @@
 # unizo-claude-plugin
 
-A Claude Code plugin for Unizo.
+A Claude Code plugin for Unizo: work your exposure review queue, sign in to your Unizo deployment with SSO, and
+switch between deployments, all from Claude Code.
+
+> **Renamed:** this plugin was formerly `unizo-ctem` (repo `ctem-claude-plugin`). See
+> [Upgrading from unizo-ctem](#upgrading-from-unizo-ctem) if you had the old version installed.
 
 **Full guide:** [docs/SETUP_AND_TESTING.md](docs/SETUP_AND_TESTING.md) covers installing, configuring for your
 GCP/AWS deployment and identity provider, administrator setup, manual and Claude-driven testing, and troubleshooting.
@@ -16,8 +20,9 @@ and switching between environments.
 | Command | `/unizo:unizo-queue` | Work your review queue (W1): Investigations awaiting review, mine or unclaimed, `crown`, `kev` |
 | Skill | `unizo-review-queue` | W1 end to end: queue → claim → review plans → `preview_commit` → `commit_actions`, confirming every write |
 | Hook | `unizo_guard` | On `unizo-cloud` tools: blocks `move_ticket` / `set_jira_assignee`, refuses `commit_actions` without a recent matching `preview_commit`, asks before every write, audits writes to `~/.config/unizo-mcp/audit.jsonl` |
+| Hook | `unizo_onboard` | At session start: offers `/unizo:unizo-plugin-configure` until an environment is picked, then finishes setup on your first message after the restart |
 | Agent | `exposure-triage` | Triages a finding and recommends a priority and next step |
-| MCP server | `unizo` | Local server (stdio) that calls your Unizo gateway, with SSO sign-in |
+| MCP server | `unizo` | Local server (stdio) for sign-in and environments. Tools: `unizo_status`, `unizo_login`, `unizo_logout` |
 | MCP server | `unizo-cloud` | Remote Unizo MCP server, registered by the active environment (`/unizo:unizo-plugin-configure <environments.json> demo` for `https://demo.unizo.ai/mcp`) |
 
 ## Install
@@ -78,6 +83,8 @@ claude
 | `UNIZO_OIDC_AUDIENCE` | `sso_audience` | no | Sent as `audience` (Auth0, some Okta authorization servers) |
 | `UNIZO_OIDC_TOKEN_TYPE` | `sso_token_type` | no | `access` (default) or `id`: the token your gateway expects |
 | `UNIZO_OIDC_REDIRECT_PORT` | `sso_redirect_port` | no | Local callback port, default `8765` |
+| `UNIZO_API_TIMEOUT` | | no | Gateway request timeout in seconds, default `20` |
+| `UNIZO_TOKEN_CACHE` | | no | Token cache path, default `~/.config/unizo-mcp/tokens.json` |
 
 ### Signing in with SSO
 
@@ -143,7 +150,7 @@ How it works:
   again from `/mcp` → `unizo-cloud` → **Authenticate**.
 - The active environment is kept in `~/.config/unizo-mcp/active-environment.json`. Restart Claude Code after switching.
 
-From a terminal: `uv run --project <plugin-dir>/mcp-server unizo-mcp env [list --file <path> | current | use <name> --file <path> | off]`.
+From a terminal: `uv run --project <plugin-dir>/mcp-server unizo-mcp env [list --file <path> | current | use <name> --file <path> [--force] | off]`.
 
 ## For administrators: deployment requirements
 
@@ -171,7 +178,7 @@ Keycloak ignores the `resource` parameter Claude Code sends, so add an audience 
 
 ```
 claude --plugin-dir .                      # load the plugin from this checkout
-cd mcp-server && uv run pytest             # MCP server tests
+cd mcp-server && uv run --extra dev pytest # MCP server tests
 ```
 
 ### Testing against a fake deployment
@@ -198,7 +205,8 @@ To test the install flow, install from a local marketplace:
 
 Outside the plugin, the MCP server reads the same `UNIZO_*` environment variables (see
 `mcp-server/src/unizo_mcp/config.py`). `uv run --project mcp-server unizo-mcp login | logout | whoami` signs in
-from a terminal and uses the same token cache.
+from a terminal and uses the same token cache. `unizo-mcp headers` prints the `Authorization` header that
+`unizo-cloud` uses (its `headersHelper`).
 
 The root `.mcp.json` uses `${CLAUDE_PLUGIN_ROOT}`, which only resolves when Claude Code loads it as a plugin.
 When you open this repo directly, disable its project-scoped copies (`disabledMcpjsonServers` in
@@ -210,9 +218,13 @@ When you open this repo directly, disable its project-scoped copies (`disabledMc
 .claude-plugin/
   plugin.json        # plugin manifest
   marketplace.json   # marketplace catalog (lists this plugin)
+.mcp.json            # local `unizo` MCP server
 commands/            # slash commands
 skills/              # skills (one folder per skill, with SKILL.md)
 agents/              # subagents
+hooks/               # onboarding and guard hooks (hooks.json + Python scripts)
+mcp-server/          # local MCP server (Python, run with uv): src/unizo_mcp, tests
+docs/                # setup, developer and planning guides
 ```
 
 ## Validate
@@ -220,3 +232,22 @@ agents/              # subagents
 ```
 claude plugin validate .
 ```
+
+## Upgrading from unizo-ctem
+
+Everything named `ctem` was renamed. If you had the old plugin installed:
+
+| Old | New |
+|---|---|
+| Plugin `unizo-ctem@unizo-ctem`, repo `Unizo-CTEM/ctem-claude-plugin` | `unizo@unizo`, `Unizo-CTEM/unizo-claude-plugin` |
+| `/unizo-ctem:unizo-ctem-plugin-configure`, `/unizo-ctem:unizo-ctem-queue` | `/unizo:unizo-plugin-configure`, `/unizo:unizo-queue` |
+| Skill `unizo-ctem-review-queue` | `unizo-review-queue` |
+| MCP servers `unizo-ctem`, `unizo-ctem-cloud` | `unizo`, `unizo-cloud` |
+| `UNIZO_CTEM_*` variables | `UNIZO_*` |
+| `~/.config/unizo-ctem-mcp/` | `~/.config/unizo-mcp/` |
+
+1. Uninstall `unizo-ctem` and remove its marketplace, then install as above.
+2. Remove the old remote server: `claude mcp remove unizo-ctem-cloud -s user`.
+3. Rename any `UNIZO_CTEM_*` variables you export to `UNIZO_*`.
+4. Restart Claude Code and run `/unizo:unizo-plugin-configure <environments.json>`. To keep your saved sign-in
+   instead, copy `~/.config/unizo-ctem-mcp/` to `~/.config/unizo-mcp/` first.
