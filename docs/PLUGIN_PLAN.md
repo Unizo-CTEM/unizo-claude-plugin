@@ -2,7 +2,7 @@
 
 **Date:** 6 November 2026
 **Based on:** *Unizo MCP Server — Tool Catalog* (working draft, revised 29 October 2026, Single Pane Draft 12) and the live `unizo-cloud` server on dev52.
-**Status:** In progress. W1 is built (6 November 2026): skill `unizo-review-queue`, command `/unizo:unizo-queue`, and the `unizo_guard` hook, which covers hooks 1–4 of section 4.4 for every `unizo-cloud` tool. Everything else is still a proposal.
+**Status:** In progress. W1 is built (6 November 2026): skill `unizo-review-queue` and command `/unizo:unizo-queue`. The `unizo_guard` and `unizo_onboard` hooks were built and then removed (12 November 2026): only Verified organizations may ship hook commands in the plugin directory. Hooks 1–4 of section 4.4 now live as rules in the skill; section 4.4 stays as the design if the organization becomes Verified. Everything else is still a proposal.
 
 **Found while building W1 (add to section 3):** `find_exposures(kev_listed=true, crown_jewel=true)` returns 0 results on dev52, even though KEV-listed rows carry `crownJewel: true`. The skill works around it by filtering on the row field.
 

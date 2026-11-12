@@ -133,7 +133,7 @@ def test_use_registers_the_remote_server_without_a_headers_helper(env_file: Path
     }
     assert ["claude", "mcp", "add-json", "--scope", "user", "unizo-cloud"] == claude.calls[-1][:6]
     state = envs.read_state()
-    assert state["name"] == "staging" and state["source"] == str(env_file) and "setup_complete" not in state
+    assert state["name"] == "staging" and state["source"] == str(env_file)
 
 
 def test_switching_signs_out_the_old_remote_and_replaces_it(env_file: Path) -> None:
@@ -210,20 +210,6 @@ def test_off_removes_the_remote_and_the_state(env_file: Path) -> None:
     assert "unizo-cloud" not in claude.servers and envs.read_state() is None
 
 
-def test_setup_done_is_recorded_and_reset_by_the_next_switch(env_file: Path) -> None:
-    claude = FakeClaude()
-    envs.use("staging", file=env_file, run=claude, out=quiet)
-    envs.mark_setup_complete(out=quiet)
-    assert envs.read_state()["setup_complete"] is True
-    envs.use("prod", file=env_file, run=claude, out=quiet)
-    assert "setup_complete" not in envs.read_state()
-
-
-def test_setup_done_needs_an_active_environment() -> None:
-    with pytest.raises(envs.EnvConfigError, match="No Unizo environment is active"):
-        envs.mark_setup_complete(out=quiet)
-
-
 # ── CLI, run as the configure command runs it ──
 
 
@@ -248,3 +234,14 @@ def test_cli_errors_and_usage(tmp_path: Path) -> None:
 def test_cli_current_with_nothing_active() -> None:
     result = run_cli("current")
     assert result.returncode == 0 and "No Unizo environment is active" in result.stdout
+
+
+def test_cli_current_flags_a_registration_by_an_older_version(env_file: Path, isolated_config: Path) -> None:
+    state = isolated_config / "config" / "unizo-mcp" / "active-environment.json"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    old = {"type": "http", "url": "https://unizo.example.com/mcp", "headersHelper": "old-unizo-helper headers"}
+    state.write_text(json.dumps({"name": "staging", "source": str(env_file), "remote": old, "remote_registered": True}))
+    result = run_cli("current")
+    assert result.returncode == 0 and "OUTDATED" in result.stdout and "staging" in result.stdout
+    state.write_text(json.dumps({"name": "staging", "source": str(env_file), "remote": {"type": "http", "url": "https://unizo.example.com/mcp"}}))
+    assert "OUTDATED" not in run_cli("current").stdout

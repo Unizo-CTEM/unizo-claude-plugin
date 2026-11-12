@@ -6,9 +6,9 @@ argument-hint: "<path-to-environments.json> [<environment name>] | off"
 Connect this plugin to the user's Unizo deployment (GCP or AWS) in one guided flow:
 **environment → restart → sign in → check**. The plugin's Unizo tools all come from the remote `unizo-cloud` MCP
 server; this command registers it for the environment the user picks, and the user signs in to it with Claude Code's
-own OAuth. Registering a server needs a Claude Code restart before it loads, so setup spans two sessions; after the
-restart, the session-start hook has Claude run this command again automatically on the user's first message. Say
-where you are as you go ("Step 1 of 2: environment").
+own OAuth. Registering a server needs a Claude Code restart before it loads, so setup spans two sessions: the user
+runs this command once to pick the environment, restarts, and runs it again (no arguments) to sign in. Say where you
+are as you go ("Step 1 of 2: environment").
 
 Arguments: `$ARGUMENTS`: the path to the user's environments file, optionally followed by the name of the environment
 to switch to; or `off`. There is no default environments file: never fall back to one, always use the file the user
@@ -26,6 +26,8 @@ Never ask the user to paste tokens or secrets into the chat.
 - `$ARGUMENTS` names a file (maybe with an environment name): the user wants to pick or switch. Go to step 1.
 - Otherwise run `env current`:
   - No environment is active: go to step 1.
+  - It prints `OUTDATED`: the environment was registered by an older plugin version and `unizo-cloud` can't connect.
+    Say so in one line, then go to step 1, sub-step 3, with the file and name `env current` printed.
   - An environment is active: go to step 2.
 
 ## 1. Environment (first session)
@@ -63,13 +65,12 @@ Never ask the user to paste tokens or secrets into the chat.
 4. Tell the user, and stop here:
 
    > Environment **<name>** is set. Restart Claude Code to load it: quit, then run `claude` again (or
-   > `claude --continue` to keep this conversation). Your first message after the restart finishes setup, including
-   > the sign-in.
+   > `claude --continue` to keep this conversation). Then run `/unizo:unizo-plugin-configure` once more to sign in
+   > and check the connection.
 
 ## 2. Sign in and check (after the restart)
 
-When this runs automatically after a restart, don't ask whether to start: say one short line first
-("Finishing Unizo setup: signing in to unizo-cloud").
+Say one short line first ("Step 2 of 2: signing in to unizo-cloud").
 
 If the environment `env current` reports isn't the one just picked (the user hasn't restarted yet), ask them to
 restart Claude Code and stop. Then look at the tools you have from `unizo-cloud`:
@@ -89,13 +90,7 @@ firewall, allow-listing). Stop.
 
 ## 3. Finish
 
-Record that setup is done so the session-start hook stops:
-
-```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/unizo_env.py setup-done
-```
-
-Then tell the user setup is complete, who they're signed in as and which tenant (from `get_my_context`), and that
-they can switch environments later with `/unizo:unizo-plugin-configure <path> [<name>]` or remove the connection with
+Tell the user setup is complete, who they're signed in as and which tenant (from `get_my_context`), and that they can
+switch environments later with `/unizo:unizo-plugin-configure <path> [<name>]` or remove the connection with
 `/unizo:unizo-plugin-configure off`. Then go back to what the user asked in their message, if anything. Suggest
 `/unizo:unizo-queue` as a first thing to try.

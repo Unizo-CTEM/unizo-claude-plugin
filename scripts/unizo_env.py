@@ -7,8 +7,7 @@ client ID). ``use <name>`` registers that server at user scope as ``unizo-cloud`
 this). The user then signs in with Claude Code's own OAuth: ``/mcp`` -> ``unizo-cloud`` -> Authenticate.
 
 There is no default environments file: the user always names one with ``--file <path>``. The active environment is
-recorded in ``<config>/unizo-mcp/active-environment.json`` together with the file it came from; the onboarding hook
-reads it.
+recorded in ``<config>/unizo-mcp/active-environment.json`` together with the file it came from.
 
 Standard library only, Python 3.8+, so it runs with any ``python3`` and needs nothing installed.
 
@@ -16,7 +15,6 @@ Standard library only, Python 3.8+, so it runs with any ``python3`` and needs no
     python3 unizo_env.py current
     python3 unizo_env.py use <name> --file <path> [--force]
     python3 unizo_env.py off
-    python3 unizo_env.py setup-done
 """
 
 from __future__ import annotations
@@ -177,6 +175,12 @@ def _write_state(data: Optional[Dict[str, Any]]) -> None:
     os.replace(tmp, str(path))
 
 
+def registered_by_older_version(state: Dict[str, Any]) -> bool:
+    """Whether ``unizo-cloud`` was registered by plugin 0.1.x, whose ``headersHelper`` ran the removed local server."""
+    remote = state.get("remote")
+    return isinstance(remote, dict) and bool(remote.get("headersHelper"))
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -261,29 +265,15 @@ def off(*, run: Runner = _run, out: Callable[[str], None] = print) -> None:
     out(f'Deactivated environment "{state["name"]}" and removed {REMOTE_SERVER_NAME}. Restart Claude Code to apply.')
 
 
-def mark_setup_complete(*, out: Callable[[str], None] = print) -> None:
-    """Records that /unizo:unizo-plugin-configure finished for the active environment, so the onboarding hook goes quiet.
-
-    Switching environments rewrites the state without this flag, so the next environment is set up again."""
-    state = read_state()
-    if state is None:
-        raise EnvConfigError("No Unizo environment is active. Run /unizo:unizo-plugin-configure to pick one first.")
-    state["setup_complete"] = True
-    state["setup_completed_at"] = _now()
-    _write_state(state)
-    out(f'Setup recorded as complete for environment "{state["name"]}".')
-
-
 # ── CLI ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
-USAGE = """usage: unizo_env.py [list --file <path> | current | use <name> --file <path> [--force] | off | setup-done]
+USAGE = """usage: unizo_env.py [list --file <path> | current | use <name> --file <path> [--force] | off]
 
   list           environments in the file (* marks the active one)
   --file <path>  the environments file to read (required for list and use; there is no default file)
   current        the active environment and the unizo-cloud registration it made
   use <name>     make <name> active and register its remote MCP server as unizo-cloud
-  off            remove the unizo-cloud server this command added and forget the active environment
-  setup-done     record that /unizo:unizo-plugin-configure finished for the active environment"""
+  off            remove the unizo-cloud server this command added and forget the active environment"""
 
 
 def _pop_file(args: List[str]) -> Tuple[List[str], Optional[Path]]:
@@ -334,7 +324,11 @@ def cli(args: List[str]) -> int:
                 return 0
             print(f"{state['name']}  (from {state.get('source', '?')}, since {state.get('activated_at', '?')})")
             print(f"  remote_mcp: {json.dumps(state.get('remote'))}")
-            print(f"  setup complete: {bool(state.get('setup_complete'))}")
+            if registered_by_older_version(state):
+                print(
+                    "  OUTDATED: unizo-cloud was registered by an older plugin version and gets its sign-in from a local "
+                    "helper that no longer exists. Run `use` for this environment again, then restart and sign in."
+                )
             return 0
         if command == "use" and len(args) >= 2:
             assert file is not None
@@ -342,9 +336,6 @@ def cli(args: List[str]) -> int:
             return 0
         if command == "off":
             off()
-            return 0
-        if command == "setup-done":
-            mark_setup_complete()
             return 0
         print(USAGE, file=sys.stderr)
         return 2
