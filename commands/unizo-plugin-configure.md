@@ -1,7 +1,6 @@
 ---
 description: Set up the Unizo plugin end to end - pick an environment from your environments.json, register the unizo-cloud MCP server for it, and sign in
 argument-hint: "<path-to-environments.json> [<environment name>] | off"
-allowed-tools: Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/unizo_env.py:*)
 ---
 
 Connect this plugin to the user's Unizo deployment (GCP or AWS) in one guided flow:
@@ -16,7 +15,8 @@ to switch to; or `off`. There is no default environments file: never fall back t
 names.
 
 Below, `env` is short for `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/unizo_env.py`, run with the Bash tool. It needs only
-`python3` and the `claude` CLI.
+`python3` and the `claude` CLI. The plugin pre-approves nothing, so Claude Code asks the user to approve each run: before
+the first one, say in one line that a few approval prompts follow and that each runs the plugin's environment script.
 
 Never ask the user to paste tokens or secrets into the chat.
 
