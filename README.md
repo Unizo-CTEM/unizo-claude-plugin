@@ -25,7 +25,7 @@ and switching between environments.
 This repo is both a plugin and a single-plugin marketplace.
 
 ```
-/plugin marketplace add Unizo-CTEM/ctem-claude-plugin
+/plugin marketplace add Unizo-CTEM/unizo-claude-plugin
 /plugin install unizo@unizo
 ```
 

@@ -28,7 +28,7 @@ Environments come only from the file you pass (the plugin ships none and reads n
 
 ```bash
 uv --version            # must be on PATH; if missing: curl -LsSf https://astral.sh/uv/install.sh | sh
-cd ~/projects/Unizo-CTEM/ctem-claude-plugin
+cd ~/projects/Unizo-CTEM/unizo-claude-plugin
 python3 -m json.tool ~/unizo-envs.json >/dev/null && echo "unizo-envs.json OK"
 cd mcp-server && uv run pytest && cd ..     # unit tests for the local MCP server
 ```
@@ -38,7 +38,7 @@ cd mcp-server && uv run pytest && cd ..     # unit tests for the local MCP serve
 Close Claude Code, then run in a terminal:
 
 ```bash
-cd ~/projects/Unizo-CTEM/ctem-claude-plugin
+cd ~/projects/Unizo-CTEM/unizo-claude-plugin
 uv run --quiet --project mcp-server unizo-mcp env off      # clears active env and removes unizo-cloud
 uv run --quiet --project mcp-server unizo-mcp logout       # clears gateway SSO tokens
 claude mcp remove unizo-cloud -s user 2>/dev/null          # in case it's still there
@@ -58,11 +58,11 @@ claude plugin list; claude mcp list; ls ~/.config/unizo-mcp 2>&1
 ## Step 2: Install the plugin
 
 ```bash
-claude plugin marketplace add ~/projects/Unizo-CTEM/ctem-claude-plugin
+claude plugin marketplace add ~/projects/Unizo-CTEM/unizo-claude-plugin
 claude plugin install unizo@unizo
 ```
 
-To test the GitHub install path instead: `/plugin marketplace add Unizo-CTEM/ctem-claude-plugin`.
+To test the GitHub install path instead: `/plugin marketplace add Unizo-CTEM/unizo-claude-plugin`.
 
 ## Step 3: Check that the plugin loads
 

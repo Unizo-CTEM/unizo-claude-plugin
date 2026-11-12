@@ -55,14 +55,14 @@ Make sure `uv` is on the `PATH` that Claude Code sees: open a new terminal and r
 In Claude Code:
 
 ```
-/plugin marketplace add Unizo-CTEM/ctem-claude-plugin
+/plugin marketplace add Unizo-CTEM/unizo-claude-plugin
 /plugin install unizo@unizo
 ```
 
 Or from a terminal:
 
 ```
-claude plugin marketplace add Unizo-CTEM/ctem-claude-plugin
+claude plugin marketplace add Unizo-CTEM/unizo-claude-plugin
 claude plugin install unizo@unizo
 ```
 
