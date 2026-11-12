@@ -46,7 +46,7 @@ WRITES = {
     "add_identity_comment", "add_investigation_comment", "add_run_comment", "add_ticket_comment",
     "assign_investigation", "commit_actions", "contact_support", "create_manual_plan", "decide_declined_member",
     "edit_ticket_draft", "generate_report", "launch_playbook", "link_existing_ticket", "move_ticket",
-    "reengage_investigation", "reject_plan", "report_wrong_destination", "select_plan", "set_jira_assignee",
+    "redraft_plan", "reengage_investigation", "reject_plan", "report_wrong_destination", "select_plan", "set_jira_assignee",
     "start_investigation", "verify_exposure_now", "verify_run_now", "withdraw_risk_acceptance",
 }
 
@@ -54,6 +54,7 @@ WRITES = {
 ASK_REASON = {
     "assign_investigation": "Changes who owns this Investigation in Unizo (and may set the Jira assignee).",
     "select_plan": "Selects the plan to work from. Nothing is committed and no ticket is created.",
+    "redraft_plan": "Asks Unizo to draft a different plan for this Investigation (at most three re-drafts).",
     "reject_plan": "Rejects a plan so it can no longer be committed. The reason is recorded.",
     "abandon_investigation": "Abandons the Investigation. Abandonment is not resolution.",
     "start_investigation": "Opens an Investigation and starts Unizo drafting plans.",
@@ -171,7 +172,7 @@ def post(event: dict[str, Any]) -> None:
             "action_keys": [str(k).upper() for k in keys] if keys else None,
         }
         save_state(session_id, state)
-    elif tool in {"reject_plan", "reengage_investigation", "edit_ticket_draft"} and not response_failed(response):
+    elif tool in {"reject_plan", "redraft_plan", "reengage_investigation", "edit_ticket_draft"} and not response_failed(response):
         # The plans or their ticket drafts changed: earlier previews of this Investigation no longer hold.
         state = load_state(session_id)
         inv = str(tool_input.get("investigation_id", "")).strip().upper()
