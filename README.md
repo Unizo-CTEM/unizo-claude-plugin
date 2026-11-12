@@ -179,8 +179,7 @@ From a terminal: `python3 <plugin-dir>/scripts/unizo_env.py [list --file <path> 
 Earlier versions shipped a local `unizo` MCP server (run with `uv`) that signed in to the Unizo gateway and passed that
 token to `unizo-cloud`. It's gone. If you set up an environment with an earlier version, Claude tells you at the next
 session start; run `/unizo:unizo-plugin-configure <environments.json> <name>` again, restart, and sign in to
-`unizo-cloud` once through `/mcp`. The old gateway token cache (`~/.config/unizo-mcp/tokens.json`) is no longer used
-and can be deleted.
+`unizo-cloud` once through `/mcp`.
 
 ## For administrators: deployment requirements
 

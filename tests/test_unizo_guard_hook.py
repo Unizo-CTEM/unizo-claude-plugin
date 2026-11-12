@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 import time
@@ -30,7 +29,6 @@ def run(mode: str, tool: str, tool_input: dict[str, Any], response: Any = None) 
         input=json.dumps(event),
         capture_output=True,
         text=True,
-        env=os.environ.copy(),
         check=True,
     )
     return json.loads(proc.stdout) if proc.stdout.strip() else None

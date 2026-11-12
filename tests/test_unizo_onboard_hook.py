@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -12,13 +11,12 @@ from typing import Any
 HOOK = Path(__file__).resolve().parents[1] / "hooks" / "unizo_onboard.py"
 
 
-def run(extra_env: dict[str, str] | None = None) -> dict[str, Any] | None:
-    env = os.environ.copy()
-    env.update(extra_env or {})
+def run() -> dict[str, Any] | None:
+    # The hook inherits the test's environment, including the isolated XDG_CONFIG_HOME from conftest.py.
     proc = subprocess.run(
         [sys.executable, str(HOOK)],
         input=json.dumps({"hook_event_name": "SessionStart", "source": "startup"}),
-        capture_output=True, text=True, env=env, check=True,
+        capture_output=True, text=True, check=True,
     )
     return json.loads(proc.stdout) if proc.stdout.strip() else None
 
@@ -52,7 +50,7 @@ def test_registration_from_an_older_version_asks_to_switch_again(isolated_config
     write_state(isolated_config, {
         "name": "dev52",
         "source": "/home/me/envs.json",
-        "remote": {"type": "http", "url": "https://dev52/mcp", "headersHelper": "old-unizo-helper headers"},
+        "remote": {"type": "http", "url": "https://unizo.example.com/mcp", "headersHelper": "old-unizo-helper headers"},
         "setup_complete": True,
     })
     out = run()

@@ -12,7 +12,7 @@ unizo-cloud   →  https://<env>/mcp   (direct, OAuth)   [registered by /unizo:u
 
 - **`unizo-cloud`** is the remote Unizo MCP server, where the Unizo tools are.
   `/unizo:unizo-plugin-configure <environments.json> <name>` adds it to your Claude Code **user** config
-  (`~/.claude.json`) by running `scripts/unizo_env.py`, which calls `claude mcp add-json`. After that, Claude Code
+  by running `scripts/unizo_env.py`, which calls `claude mcp add-json`. After that, Claude Code
   connects to it directly and signs in with its own OAuth. It stays registered even if the plugin is turned off, until
   `/unizo:unizo-plugin-configure off` or `claude mcp remove unizo-cloud -s user`.
 - The plugin has **no local MCP server**. Its hooks and `scripts/unizo_env.py` are standard-library Python run with
