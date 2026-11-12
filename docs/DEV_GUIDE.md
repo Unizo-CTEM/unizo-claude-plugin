@@ -72,29 +72,32 @@ that's expected. Nothing prompts you to set up: the plugin has no hooks, so you 
 ## Step 4: Pick the first environment (demo)
 
 1. `/unizo:unizo-plugin-configure ~/unizo-envs.json`. It lists `demo` and `dev52` and asks which to use.
-2. Pick `demo`. It reports the remote MCP URL and client ID, and asks you to restart.
+2. Pick `demo`. It reports the remote MCP URL and client ID, then runs `unizo_env.py login` (`claude mcp login
+   unizo-cloud`): the demo sign-in page opens in your browser. Sign in; the browser lands on
+   `http://localhost:<port>/callback` (check that `<port>` is the environment's `callback_port`) and the command
+   says you're signed in and asks you to restart.
 3. `claude mcp get unizo-cloud` in a terminal shows the demo URL and client ID, with no `headersHelper`.
 4. **Restart Claude Code.**
 
-## Step 5: Sign in (`unizo-cloud`)
+## Step 5: Check the connection (`unizo-cloud`)
 
-1. Run `/unizo:unizo-plugin-configure` (no arguments). Claude calls `mcp__unizo-cloud__authenticate`, then opens the
-   URL in your default browser with `open` (allow it if asked) and also shows the link.
-2. Sign in. The browser lands on `http://localhost:<port>/callback`, and Claude Code completes the sign-in from that
-   page with no paste needed. Check that `<port>` is the environment's `callback_port`. Tell Claude you're done.
-3. Claude calls `get_my_context` and reports your demo user and tenant.
+1. `/mcp` shows `unizo-cloud` connected, not "Needs authentication".
+2. Run `/unizo:unizo-plugin-configure` (no arguments). Claude calls `get_my_context` and reports your demo user and
+   tenant.
 
-Doing it by hand also works: `/mcp` → `unizo-cloud` → **Authenticate**. To test the fallback, sign in, close the
+To test the in-session fallback, run `claude mcp logout unizo-cloud`, restart, and run the command again: Claude calls
+`mcp__unizo-cloud__authenticate`, opens the URL with `open` and shows the link; tell Claude when you're done.
+Doing it by hand also works: `/mcp` → `unizo-cloud` → **Authenticate**. To test the paste fallback, sign in, close the
 callback tab before it loads (or sign in from another machine), and paste the callback address into the chat: Claude
 passes it to `mcp__unizo-cloud__complete_authentication`. "Invalid redirect_uri" means the Keycloak client doesn't
 allow `http://localhost:<port>/callback`; set `callback_port` in the environments file or register the port.
 
 ## Step 6: Switch to dev52
 
-1. `/unizo:unizo-plugin-configure ~/unizo-envs.json dev52`
+1. `/unizo:unizo-plugin-configure ~/unizo-envs.json dev52`. Sign in to dev52 when the browser opens (each realm has
+   its own login; switching signs `unizo-cloud` out whenever its URL or client ID changes).
 2. **Restart Claude Code.**
-3. Run `/unizo:unizo-plugin-configure` again to sign in (each realm has its own login; switching signs `unizo-cloud`
-   out whenever its URL or client ID changes).
+3. Run `/unizo:unizo-plugin-configure` again to check the connection.
 4. *"Call unizo-cloud get_my_context"* returns your dev52 context. That confirms the switch worked.
 
 ## Step 7: Switch back and turn off
