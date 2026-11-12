@@ -12,8 +12,8 @@ The flow is **queue → read → take → weigh → (re-draft) → choose → ch
 
 | Step | Tool | Notes |
 |---|---|---|
-| 1. The queue | `find_investigations` | Awaiting review; mine or unclaimed; crown jewel; KEV; ordered by what each Investigation is about |
-| 2. Read it | `get_investigation` → `get_exposure` as needed | Every plan and action. Reading needs no ownership |
+| 1. The queue | `find_investigations` | Awaiting review; mine or unclaimed; crown jewel; KEV; soonest SLA first |
+| 2. Read it | `get_investigation` + `get_exposure` → more `get_exposure` detail as needed | Is the path still live? Then every plan and action. Reading needs no ownership |
 | 3. Take it | `assign_investigation` | Only once the user decides to work it. Required before re-draft or commit, never before the read |
 | 4. Weigh the plans | (the agent) | Side by side from what `get_investigation` returned; `preview_commit` per candidate if useful |
 | 5. Ask for a different plan | `redraft_plan` → `get_investigation` | Only if none fits. Up to three. Before choosing, not after |
@@ -47,9 +47,11 @@ are in `tools.refused`. If `unizo-cloud` is missing or unauthenticated, tell the
 `/unizo:unizo-plugin-configure <environments.json> <env>` and authenticate it from `/mcp`.
 
 ### 1. The queue
-Pick the recipe from what the user asked (default: mine first, then unclaimed). Order by score: use
-`sort_by=EXPOSURE_SEVERITY` (the default) unless the user asks for SLA, reach or recency, and say which order
-you used.
+Pick the recipe from what the user asked (default: mine first, then unclaimed). Order by
+`sort_by=SLA_DEADLINE` (soonest first) by default, and say which order you used. Use `EXPOSURE_SEVERITY`,
+`REACH_COUNT` or a recency sort only when the user asks. Do not default to `EXPOSURE_SEVERITY`: most of the
+queue shares one severity (CRITICAL on crown jewels), and ties come back in internal-ID order, so its top row
+is effectively arbitrary. If the user asks for severity, say that rows within one severity are not ranked.
 
 | User asks for | Calls |
 |---|---|
@@ -61,21 +63,35 @@ you used.
 Show at most 10 rows as a table: Investigation, Exposure (ID and short title), severity, crown jewel, SLA
 deadline and whether it is breached, owner or "Unclaimed", origin (Manual, Auto-Triage, Run). State the total
 from `pagination.total` with its filter and order, e.g. "7,568 awaiting review and unclaimed; showing the 10
-with the worst Exposure severity". Then offer to read the first, or ask which one.
+with the soonest SLA deadline". Then offer to read the first, or ask which one.
 
 ### 2. Read it
-No ownership needed. Call `get_investigation(investigation_id)` and summarise:
+No ownership needed. Call `get_investigation(investigation_id)` and `get_exposure(exposure_id)` (summary, no
+detail), and summarise:
 1. **State and next step** (`state`, `nextStep`), owner (or Unclaimed), SLA (`sla.deadline`, `breached`,
-   `tier`), origin and, for Auto-Triage, the criterion that fired.
-2. **The Exposure** in a few lines. Call `get_exposure(exposure_id, detail=[...])` only as needed: `path` for
+   `tier`), origin and, for Auto-Triage, the criterion that fired. Note `redraftCount` if present (re-drafts
+   already used, out of three).
+2. **Is the path still live?** Check this before any plan, and lead with it if it fails. From the Exposure
+   summary:
+   - `state` is `NO_ACTIVE_PATH`, or `attackChainCount` is 0: Unizo currently sees no live path.
+   - The source data is stale: the data-as-of date or last evaluation is more than 7 days old (use
+     `get_data_freshness` if the summary does not say).
+   - The risk factors flag something that changes the question, e.g. the identity's or asset's owner is a
+     terminated employee.
+
+   If any of these holds, say so plainly and, before weighing plans, offer the user these choices: refresh it
+   with `verify_exposure_now` (a write; confirm first) and read the Exposure again; `abandon_investigation`
+   if the path is confirmed gone (confirm first, and say abandonment is not resolution); or go on to weigh the
+   plans anyway. Do not weigh plans for a path that is gone without the user saying to.
+3. **The Exposure** in a few lines. Call `get_exposure(exposure_id, detail=[...])` only as needed: `path` for
    how the path runs or what control blocks it, `risk` for why it scores what it does, `blast_radius` for what
    it can reach.
-3. **Every plan**, one short block each: plan key, role (PRIMARY / ALTERNATE), kind (CANONICAL_FIX removes the
+4. **Every plan**, one short block each: plan key, role (PRIMARY / ALTERNATE), kind (CANONICAL_FIX removes the
    cause; COMPENSATING_CONTROL compensates for it), what else it resolves (`alsoResolves`, count plus the
    first few IDs), its rationale (one or two sentences), `expectedOutcome.risk_reduction`, and
    `implementationEstimate` (time, effort, operational impact). Then each action: key, type, title, **gate
    level**, fix target, SLA, and whether it has a ticket draft (with verification and rollback steps).
-4. **Where tickets go**: `ticketTarget`. If `configured` is false, say a commit cannot create tickets.
+5. **Where tickets go**: `ticketTarget`. If `configured` is false, say a commit cannot create tickets.
 
 ### 3. Take it
 Only when the user decides to work it. If it is unclaimed, ask, then call
@@ -146,7 +162,8 @@ committed and tickets, and anything left for the user to do in Unizo (Hard-gate 
 
 - `find_investigations` has no KEV, crown-jewel or "owner is me" filters. Use `assignee_id` for mine, and the
   `exposure.crownJewel` field and the KEV recipe above for the rest. It has no sort by Exposure risk score
-  (GCR) either: `EXPOSURE_SEVERITY` is the closest server-side order.
+  (GCR) either, and `EXPOSURE_SEVERITY` ties come back in internal-ID order, so the skill defaults to
+  `SLA_DEADLINE`.
 - `find_exposures(kev_listed=true, crown_jewel=true)` returns nothing, even though KEV-listed rows carry
   `crownJewel: true`. Do not combine the two filters. Filter on the row field and say you did.
 - `redraft_plan` is not deployed yet; use the `reengage_investigation` fallback in step 5.
