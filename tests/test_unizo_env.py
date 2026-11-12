@@ -210,40 +210,6 @@ def test_off_removes_the_remote_and_the_state(env_file: Path) -> None:
     assert "unizo-cloud" not in claude.servers and envs.read_state() is None
 
 
-def test_login_runs_claude_mcp_login_for_the_registered_server(env_file: Path) -> None:
-    claude = FakeClaude()
-    envs.use("staging", file=env_file, run=claude, out=quiet)
-    logins: list[tuple[list[str], int]] = []
-
-    def run_login(args: list[str], timeout: int) -> int:
-        logins.append((args, timeout))
-        return 0
-
-    assert envs.login(timeout=42, run=claude, run_login=run_login, out=quiet)
-    assert logins == [(["claude", "mcp", "login", "unizo-cloud"], 42)]
-
-
-@pytest.mark.parametrize(("code", "message"), [(1, "exit code 1"), (-1, "within 300 seconds")])
-def test_login_failure_or_timeout_points_to_the_in_session_sign_in(env_file: Path, code: int, message: str) -> None:
-    claude = FakeClaude()
-    envs.use("staging", file=env_file, run=claude, out=quiet)
-    lines: list[str] = []
-    assert not envs.login(run=claude, run_login=lambda args, timeout: code, out=lines.append)
-    text = "\n".join(lines)
-    assert message in text and "/mcp -> unizo-cloud -> Authenticate" in text
-
-
-def test_login_needs_an_active_environment_and_the_server(env_file: Path) -> None:
-    claude = FakeClaude()
-    never = lambda args, timeout: pytest.fail("claude mcp login should not run")  # noqa: E731
-    with pytest.raises(envs.EnvConfigError, match="No Unizo environment is active"):
-        envs.login(run=claude, run_login=never, out=quiet)
-    envs.use("staging", file=env_file, run=claude, out=quiet)
-    claude.servers.clear()
-    with pytest.raises(envs.EnvConfigError, match="No user-scope unizo-cloud"):
-        envs.login(run=claude, run_login=never, out=quiet)
-
-
 # ── CLI, run as the configure command runs it ──
 
 

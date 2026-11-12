@@ -108,16 +108,13 @@ will:
 
 1. let you pick an environment from that file, and register its remote MCP server as `unizo-cloud` in your Claude
    Code user config;
-2. sign you in to `unizo-cloud` right away with `claude mcp login unizo-cloud`: your company's sign-in page opens
-   in your default browser, and after you sign in the browser returns to `http://localhost:<port>/callback` and
-   Claude Code stores the tokens. This is Claude Code's own OAuth, the same as `/mcp` → `unizo-cloud` →
-   **Authenticate**;
-3. ask you to restart Claude Code so the server loads (`claude` or `claude --continue`). It connects already signed
-   in; run `/unizo:unizo-plugin-configure` again (no arguments) to check the connection with `get_my_context`.
-
-If the sign-in in step 2 is skipped (remote or SSH session) or doesn't finish, the command signs you in after the
-restart instead: run it again with no arguments. On a remote or SSH session the callback page can't load: paste its
-full address into the chat.
+2. ask you to restart Claude Code so the server loads (`claude` or `claude --continue`);
+3. after the restart, run `/unizo:unizo-plugin-configure` again (no arguments): it signs you in to `unizo-cloud`
+   through your company's sign-in page and checks the connection with `get_my_context`. Claude opens the sign-in
+   page in your default browser (you may be asked to allow the `open` command). After you sign in, the browser
+   returns to `http://localhost:<port>/callback` and Claude Code finishes the sign-in by itself. This is Claude
+   Code's own OAuth, the same as `/mcp` → `unizo-cloud` → **Authenticate**. On a remote or SSH session the
+   callback page can't load: paste its full address into the chat instead.
 
 The plugin asks for nothing during `/plugin install`.
 
