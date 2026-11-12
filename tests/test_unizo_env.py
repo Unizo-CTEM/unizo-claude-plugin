@@ -75,8 +75,8 @@ def quiet(_: str) -> None:
 @pytest.mark.parametrize(
     ("environment", "message"),
     [
-        ({"remote_mcp": {"url": "https://x/mcp"}, "api_token": "s3cret"}, "Secrets don't belong"),
-        ({"remote_mcp": {"url": "https://x/mcp"}, "sso_client_secret": "s3cret"}, "Secrets don't belong"),
+        ({"remote_mcp": {"url": "https://x/mcp"}, "api_token": "YOUR_API_KEY"}, "Secrets don't belong"),
+        ({"remote_mcp": {"url": "https://x/mcp"}, "sso_client_secret": "YOUR_API_KEY"}, "Secrets don't belong"),
         ({"remote_mcp": {"url": "https://x/mcp"}, "colour": "blue"}, "unknown key"),
         ({"remote_mcp": {"url": "http://example.com/mcp"}}, "https://"),
         ({"remote_mcp": {"url": "https://x/mcp", "callback_port": 70000}}, "callback_port"),

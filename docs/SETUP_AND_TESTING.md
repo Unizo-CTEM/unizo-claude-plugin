@@ -44,7 +44,7 @@ Claude Code
 |---|---|
 | Claude Code | `claude --version` |
 | `python3` 3.8 or later, on the `PATH` Claude Code sees | `python3 --version` |
-| HTTPS access to your Unizo MCP server | `curl -sI https://<your-unizo>/mcp` (a `401` is fine) |
+| HTTPS access to your Unizo MCP server | Open the MCP URL from your environments file in a browser: an error such as `401` means it's reachable |
 
 ### Install from the marketplace
 
@@ -129,7 +129,7 @@ Keys from earlier plugin versions (`api_url`, `sso_*`, `use_env_secrets`) are ac
 
 How switching works:
 - `use` registers `unizo-cloud` at user scope with `claude mcp add-json`. The plugin can't ship it in a `.mcp.json`:
-  Claude Code reads a remote server's `oauth.clientId` literally and doesn't substitute `${ENV_VAR}` there.
+  Claude Code reads a remote server's `oauth.clientId` literally and doesn't substitute environment-variable references there.
 - When the URL or client ID changes, `use` signs the old server out (`claude mcp logout unizo-cloud`), because Claude
   Code would otherwise reuse the cached OAuth client. You sign in again after the restart.
 - `use` won't replace a `unizo-cloud` server it didn't add unless you pass `--force`; the configure command asks first.
@@ -142,7 +142,6 @@ Earlier versions shipped a local `unizo` MCP server, run with `uv`, that signed 
 token to `unizo-cloud` through a `headersHelper`. That server is gone. If your environment was set up by an earlier
 version, the onboarding hook says so at the next session start. Run
 `/unizo:unizo-plugin-configure <environments.json> <name>` again, restart, and sign in once through `/mcp`.
-`~/.config/unizo-mcp/tokens.json` (the old gateway token cache) is no longer used and can be deleted.
 
 ---
 
@@ -213,7 +212,7 @@ Also run `claude plugin validate .`.
 
 ### 5.2 Interactive test in Claude Code
 
-1. Install from your checkout: `claude plugin marketplace add "$PWD"`, then `claude plugin install unizo@unizo`.
+1. Install from your checkout: `claude plugin marketplace add /path/to/unizo-claude-plugin`, then `claude plugin install unizo@unizo`.
 2. Start Claude Code **in a different folder** and run through:
 
 | # | Do | Expect |
@@ -232,7 +231,7 @@ Also run `claude plugin validate .`.
 
 Do this once per customer environment, with a real user account.
 
-- [ ] `curl -sI <remote_mcp.url>` from the user's network answers (`401` without a token is expected).
+- [ ] From the user's network, the `remote_mcp.url` answers in a browser (`401` without a token is expected).
 - [ ] `/unizo:unizo-plugin-configure <customer environments.json> <customer env>`, restart, and sign in: the browser
       shows the **customer's** sign-in page and `unizo-cloud` connects with its tools listed.
 - [ ] `get_my_context` returns the user's own account and the right tenant.
