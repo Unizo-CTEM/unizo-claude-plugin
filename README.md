@@ -18,7 +18,7 @@ and switching between environments.
 |---|---|---|
 | Command | `/unizo:unizo-plugin-configure <environments.json> [<name>]` | Guided setup: pick or switch an environment from the environments file you pass, then one SSO sign-in for both the gateway and the `unizo-cloud` MCP server |
 | Command | `/unizo:unizo-queue` | Work your review queue (W1): Investigations awaiting review, mine or unclaimed, `crown`, `kev` |
-| Skill | `unizo-review-queue` | W1 end to end: queue → claim → review plans → `preview_commit` → `commit_actions`, confirming every write |
+| Skill | `unizo-review-queue` | W1 end to end: queue → read → take → weigh plans → re-draft (if none fits) → choose → `preview_commit` → `commit_actions`, confirming every write |
 | Hook | `unizo_guard` | On `unizo-cloud` tools: blocks `move_ticket` / `set_jira_assignee`, refuses `commit_actions` without a recent matching `preview_commit`, asks before every write, audits writes to `~/.config/unizo-mcp/audit.jsonl` |
 | Hook | `unizo_onboard` | At session start: offers `/unizo:unizo-plugin-configure` until an environment is picked, then finishes setup on your first message after the restart |
 | Agent | `exposure-triage` | Triages a finding and recommends a priority and next step |

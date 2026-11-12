@@ -53,7 +53,7 @@ def test_ticket_moves_are_denied(tool: str) -> None:
     assert verdict(run("pre", tool, {"investigation_id": "INV-1"})) == "deny"
 
 
-@pytest.mark.parametrize("tool", ["assign_investigation", "select_plan", "reject_plan", "abandon_investigation"])
+@pytest.mark.parametrize("tool", ["assign_investigation", "select_plan", "redraft_plan", "reject_plan", "abandon_investigation"])
 def test_other_writes_ask(tool: str) -> None:
     assert verdict(run("pre", tool, {"investigation_id": "INV-1"})) == "ask"
 
@@ -103,6 +103,12 @@ def test_stale_preview_is_denied(isolated_config: Path) -> None:
 def test_reject_plan_invalidates_previews() -> None:
     run("post", "preview_commit", {"investigation_id": "INV-1", "plan_key": "PLAN-01"})
     run("post", "reject_plan", {"investigation_id": "INV-1", "plan_key": "PLAN-02", "reason": "no"})
+    assert verdict(run("pre", "commit_actions", COMMIT)) == "deny"
+
+
+def test_redraft_plan_invalidates_previews() -> None:
+    run("post", "preview_commit", {"investigation_id": "INV-1", "plan_key": "PLAN-01"})
+    run("post", "redraft_plan", {"investigation_id": "INV-1", "guidance": "avoid downtime"})
     assert verdict(run("pre", "commit_actions", COMMIT)) == "deny"
 
 
