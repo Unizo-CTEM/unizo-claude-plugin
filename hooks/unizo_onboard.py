@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""SessionStart hook: walk new users through /unizo-ctem:unizo-ctem-plugin-configure.
+"""SessionStart hook: walk new users through /unizo:unizo-plugin-configure.
 
 Claude Code has no plugin install hook, so this runs at the start of every session; the first session after
 installing the plugin is where onboarding starts. It has three outcomes:
 
-* nothing set up (no active environment, no ``UNIZO_CTEM_API_URL`` in the environment): no message is shown, but
-  Claude is told to offer ``/unizo-ctem:unizo-ctem-plugin-configure``, which asks for their environments.json, switches to an environment, and signs in.
+* nothing set up (no active environment, no ``UNIZO_API_URL`` in the environment): no message is shown, but
+  Claude is told to offer ``/unizo:unizo-plugin-configure``, which asks for their environments.json, switches to an environment, and signs in.
 * an environment is active but setup hasn't finished (the switch needs a restart, so setup always spans two sessions):
-  tell the user setup finishes with their first message, and tell Claude to run ``/unizo-ctem:unizo-ctem-plugin-configure``
+  tell the user setup finishes with their first message, and tell Claude to run ``/unizo:unizo-plugin-configure``
   in its first reply without asking. The single SSO sign-in normally happened before the restart and also covers
-  ``unizo-ctem-cloud``, so this checks the connection and signs in only if needed. A hook can't start a turn on
+  ``unizo-cloud``, so this checks the connection and signs in only if needed. A hook can't start a turn on
   its own, so the user's first message is what kicks it off.
-* setup finished (``unizo-ctem-mcp env setup-done``), or ``UNIZO_CTEM_API_URL`` sets a gateway with no environment:
+* setup finished (``unizo-mcp env setup-done``), or ``UNIZO_API_URL`` sets a gateway with no environment:
   stay silent.
 
 Standard library only. It never raises: a hook crash must not break the session.
@@ -27,7 +27,7 @@ from typing import Any
 
 def config_dir() -> Path:
     base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(base) / "unizo-ctem-mcp"
+    return Path(base) / "unizo-mcp"
 
 
 def active_state() -> dict[str, Any] | None:
@@ -39,7 +39,7 @@ def active_state() -> dict[str, Any] | None:
 
 
 def has_configured_gateway() -> bool:
-    return bool(os.environ.get("UNIZO_CTEM_API_URL", "").strip())
+    return bool(os.environ.get("UNIZO_API_URL", "").strip())
 
 
 def emit(message: str | None, context: str) -> None:
@@ -57,23 +57,23 @@ def main() -> None:
             return
         emit(
             None,
-            "The Unizo CTEM plugin was just installed and isn't set up: no CTEM environment is active and no gateway "
-            "URL is configured. In your first reply, whatever the user asks, offer to run /unizo-ctem:unizo-ctem-plugin-configure. "
+            "The Unizo plugin was just installed and isn't set up: no Unizo environment is active and no gateway "
+            "URL is configured. In your first reply, whatever the user asks, offer to run /unizo:unizo-plugin-configure. "
             "It asks for the path to their environments.json, switches to an environment, and then signs them in. "
-            "Don't attempt CTEM work before that.",
+            "Don't attempt Unizo work before that.",
         )
         return
     if state.get("setup_complete"):
         return
     name = state["name"]
     emit(
-        f'Unizo CTEM: environment "{name}" is active. Setup finishes with your first message.',
-        f'The Unizo CTEM environment "{name}" was selected in an earlier session and Claude Code has since restarted, '
+        f'Unizo: environment "{name}" is active. Setup finishes with your first message.',
+        f'The Unizo environment "{name}" was selected in an earlier session and Claude Code has since restarted, '
         "but setup isn't finished. In your first reply, whatever the user says, finish it right away without asking "
-        "first: invoke the unizo-ctem:unizo-ctem-plugin-configure skill with the Skill tool (no arguments) and follow it from "
-        "step 0. It skips the environment step and checks the connection. One SSO sign-in covers both the CTEM "
-        "gateway and the remote unizo-ctem-cloud server; sign in (unizo_ctem_login) only if the gateway isn't signed "
-        "in, and use mcp__unizo-ctem-cloud__authenticate only as the last resort the command describes. Once setup "
+        "first: invoke the unizo:unizo-plugin-configure skill with the Skill tool (no arguments) and follow it from "
+        "step 0. It skips the environment step and checks the connection. One SSO sign-in covers both the Unizo "
+        "gateway and the remote unizo-cloud server; sign in (unizo_login) only if the gateway isn't signed "
+        "in, and use mcp__unizo-cloud__authenticate only as the last resort the command describes. Once setup "
         "is done, get back to what the user asked.",
     )
 

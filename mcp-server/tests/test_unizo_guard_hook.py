@@ -1,4 +1,4 @@
-"""Tests for hooks/unizo_ctem_guard.py, run as Claude Code runs it: a subprocess fed the hook event on stdin."""
+"""Tests for hooks/unizo_guard.py, run as Claude Code runs it: a subprocess fed the hook event on stdin."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-GUARD = Path(__file__).resolve().parents[2] / "hooks" / "unizo_ctem_guard.py"
+GUARD = Path(__file__).resolve().parents[2] / "hooks" / "unizo_guard.py"
 SESSION = "sess-1"
 
 
@@ -20,7 +20,7 @@ def run(mode: str, tool: str, tool_input: dict[str, Any], response: Any = None) 
     event = {
         "session_id": SESSION,
         "hook_event_name": "PreToolUse" if mode == "pre" else "PostToolUse",
-        "tool_name": f"mcp__unizo-ctem-cloud__{tool}",
+        "tool_name": f"mcp__unizo-cloud__{tool}",
         "tool_input": tool_input,
     }
     if mode == "post":
@@ -93,7 +93,7 @@ def test_commit_without_confirmed_is_denied() -> None:
 
 def test_stale_preview_is_denied(isolated_config: Path) -> None:
     run("post", "preview_commit", {"investigation_id": "INV-1", "plan_key": "PLAN-01"})
-    state_file = isolated_config / "config" / "unizo-ctem-mcp" / "hook-state" / f"{SESSION}.json"
+    state_file = isolated_config / "config" / "unizo-mcp" / "hook-state" / f"{SESSION}.json"
     state = json.loads(state_file.read_text())
     state["previews"]["INV-1|PLAN-01"]["at"] = time.time() - 31 * 60
     state_file.write_text(json.dumps(state))
@@ -109,7 +109,7 @@ def test_reject_plan_invalidates_previews() -> None:
 def test_writes_are_audited_and_reads_are_not(isolated_config: Path) -> None:
     run("post", "find_investigations", {"state": "AWAITING_REVIEW"})
     run("post", "assign_investigation", {"investigation_id": "INV-1"}, {"jiraAssigneeSet": True})
-    audit = isolated_config / "config" / "unizo-ctem-mcp" / "audit.jsonl"
+    audit = isolated_config / "config" / "unizo-mcp" / "audit.jsonl"
     lines = [json.loads(line) for line in audit.read_text().splitlines()]
     assert [line["tool"] for line in lines] == ["assign_investigation"]
     assert lines[0]["failed"] is False

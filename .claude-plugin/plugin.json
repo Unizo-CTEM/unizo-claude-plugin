@@ -1,7 +1,7 @@
 {
-  "name": "unizo-ctem",
+  "name": "unizo",
   "version": "0.1.0",
-  "description": "Unizo CTEM toolkit for Claude Code: commands, skills, and agents for Continuous Threat Exposure Management workflows.",
+  "description": "Unizo toolkit for Claude Code: commands, skills, and agents for exposure management workflows.",
   "author": {
     "name": "Unizo"
   },
@@ -9,7 +9,6 @@
   "repository": "https://github.com/Unizo-CTEM/ctem-claude-plugin",
   "license": "UNLICENSED",
   "keywords": [
-    "ctem",
     "security",
     "exposure-management",
     "unizo"

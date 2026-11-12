@@ -740,7 +740,7 @@ wheels = [
 ]
 
 [[package]]
-name = "unizo-ctem-mcp"
+name = "unizo-mcp"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

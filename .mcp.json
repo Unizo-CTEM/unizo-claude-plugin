@@ -1,17 +1,17 @@
 {
   "mcpServers": {
-    "unizo-ctem": {
+    "unizo": {
       "command": "uv",
       "args": [
         "run",
         "--quiet",
         "--project",
         "${CLAUDE_PLUGIN_ROOT}/mcp-server",
-        "unizo-ctem-mcp"
+        "unizo-mcp"
       ],
       "env": {
-        "UNIZO_CTEM_CONFIGURE_HINT": "Run /unizo-ctem:unizo-ctem-plugin-configure to pick an environment",
-        "UNIZO_CTEM_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}"
+        "UNIZO_CONFIGURE_HINT": "Run /unizo:unizo-plugin-configure to pick an environment",
+        "UNIZO_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}"
       }
     }
   }

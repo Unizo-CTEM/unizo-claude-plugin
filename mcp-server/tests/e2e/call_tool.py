@@ -1,7 +1,7 @@
-"""Call a tool on the CTEM MCP server directly, without Claude. Reads the same CTEM_* environment variables.
+"""Call a tool on the Unizo MCP server directly, without Claude. Reads the same UNIZO_* environment variables.
 
-    uv run --project mcp-server python mcp-server/tests/e2e/call_tool.py                 # unizo_ctem_status
-    uv run --project mcp-server python mcp-server/tests/e2e/call_tool.py unizo_ctem_login '{"wait_seconds": 60}'
+    uv run --project mcp-server python mcp-server/tests/e2e/call_tool.py                 # unizo_status
+    uv run --project mcp-server python mcp-server/tests/e2e/call_tool.py unizo_login '{"wait_seconds": 60}'
     uv run --project mcp-server python mcp-server/tests/e2e/call_tool.py --list
 
 Starts the server in-process through a real MCP client session, so it exercises the same code Claude Code uses.
@@ -15,7 +15,7 @@ import sys
 
 from mcp import Client
 
-from unizo_ctem_mcp.server import build_server
+from unizo_mcp.server import build_server
 
 
 async def main(argv: list[str]) -> int:
@@ -24,7 +24,7 @@ async def main(argv: list[str]) -> int:
             for tool in (await client.list_tools()).tools:
                 print(f"{tool.name}: {(tool.description or '').splitlines()[0]}")
             return 0
-        name = argv[0] if argv else "unizo_ctem_status"
+        name = argv[0] if argv else "unizo_status"
         args = json.loads(argv[1]) if len(argv) > 1 else {}
         result = await client.call_tool(name, args)
         for block in result.content:

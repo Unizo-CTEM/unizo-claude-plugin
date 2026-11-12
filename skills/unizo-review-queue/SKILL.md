@@ -1,13 +1,13 @@
 ---
-name: unizo-ctem-review-queue
-description: Work the user's Unizo CTEM review queue (workflow W1) - list Investigations awaiting review (mine or unclaimed, optionally crown-jewel or KEV only), claim one, walk through Unizo's drafted plans, preview where tickets would go, and commit only after the user agrees. Use when the user asks "what's waiting for my review", "work my queue", "next investigation", or to review and commit a plan.
+name: unizo-review-queue
+description: Work the user's Unizo review queue (workflow W1) - list Investigations awaiting review (mine or unclaimed, optionally crown-jewel or KEV only), claim one, walk through Unizo's drafted plans, preview where tickets would go, and commit only after the user agrees. Use when the user asks "what's waiting for my review", "work my queue", "next investigation", or to review and commit a plan.
 ---
 
 # Work my review queue (W1)
 
 The user wants to work through Investigations that are waiting for review: see the queue, take one, understand
-the plans Unizo drafted, and commit a sound one. All calls go to the **`unizo-ctem-cloud`** MCP server
-(`mcp__unizo-ctem-cloud__*`). The local `unizo-ctem` server is only for sign-in (`unizo_ctem_status`, `unizo_ctem_login`).
+the plans Unizo drafted, and commit a sound one. All calls go to the **`unizo-cloud`** MCP server
+(`mcp__unizo-cloud__*`). The local `unizo` server is only for sign-in (`unizo_status`, `unizo_login`).
 
 ## Ground rules
 
@@ -28,8 +28,8 @@ the plans Unizo drafted, and commit a sound one. All calls go to the **`unizo-ct
 
 ### 1. Orient
 Call `get_my_context`. Note the user's `user.id` (needed for "mine"), check that the W1 tools are in
-`tools.available`, and stop with the refusal reason if any are in `tools.refused`. If `unizo-ctem-cloud` is missing
-or unauthenticated, tell the user to run `/unizo-ctem:unizo-ctem-plugin-configure <environments.json> <env>` and authenticate it from `/mcp`.
+`tools.available`, and stop with the refusal reason if any are in `tools.refused`. If `unizo-cloud` is missing
+or unauthenticated, tell the user to run `/unizo:unizo-plugin-configure <environments.json> <env>` and authenticate it from `/mcp`.
 
 ### 2. Build the queue
 Pick the recipe from what the user asked (default: mine first, then unclaimed):

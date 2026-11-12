@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Headless smoke test: drives real Claude Code (claude -p) against the installed unizo-ctem plugin.
+# Headless smoke test: drives real Claude Code (claude -p) against the installed unizo plugin.
 #
 # Prerequisites:
 #   - the plugin is installed and configured (see docs/SETUP_AND_TESTING.md), e.g. against fake_stack.py
@@ -11,10 +11,10 @@
 # enough for fake_stack.py (it signs in instantly). Against a real IdP, unset FAKE_BROWSER=1 to use your browser.
 set -euo pipefail
 
-OUT="${1:-$(mktemp -d -t ctem-smoke)}"
+OUT="${1:-$(mktemp -d -t unizo-smoke)}"
 mkdir -p "$OUT"
-TOOLS="mcp__plugin_unizo-ctem_unizo-ctem__unizo_ctem_status,mcp__plugin_unizo-ctem_unizo-ctem__unizo_ctem_login,mcp__plugin_unizo-ctem_unizo-ctem__unizo_ctem_logout"
-WORK="$(mktemp -d -t ctem-smoke-work)"   # neutral directory, so no project .mcp.json interferes
+TOOLS="mcp__plugin_unizo_unizo__unizo_status,mcp__plugin_unizo_unizo__unizo_login,mcp__plugin_unizo_unizo__unizo_logout"
+WORK="$(mktemp -d -t unizo-smoke-work)"   # neutral directory, so no project .mcp.json interferes
 
 if [[ "${FAKE_BROWSER:-1}" == "1" ]]; then
   cat > "$OUT/browser.sh" <<'EOF'
@@ -39,7 +39,7 @@ for line in open(sys.argv[1]):
         continue
     if m.get("type") == "assistant":
         for c in m["message"]["content"]:
-            if c["type"] == "tool_use" and c["name"].startswith("mcp__plugin_unizo-ctem"):
+            if c["type"] == "tool_use" and c["name"].startswith("mcp__plugin_unizo"):
                 print("  tool:", c["name"].split("__")[-1], json.dumps(c["input"]))
     elif m.get("type") == "result":
         print("  answer:", (m.get("result") or "").strip().replace("\n", "\n          "))
@@ -47,8 +47,8 @@ EOF
   echo
 }
 
-run 01-setup   "/unizo-ctem:unizo-ctem-plugin-configure"
-run 02-status  "Is my CTEM connection healthy? Who am I signed in as?"
-run 03-relogin "Sign me out of CTEM, then sign me back in."
+run 01-setup   "/unizo:unizo-plugin-configure"
+run 02-status  "Is my Unizo connection healthy? Who am I signed in as?"
+run 03-relogin "Sign me out of Unizo, then sign me back in."
 
 echo "Transcripts: $OUT"

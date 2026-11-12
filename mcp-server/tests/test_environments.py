@@ -1,4 +1,4 @@
-"""Named environments: file parsing, how the active one replaces UNIZO_CTEM_* variables, and the switch command."""
+"""Named environments: file parsing, how the active one replaces UNIZO_* variables, and the switch command."""
 
 from __future__ import annotations
 
@@ -8,21 +8,21 @@ from pathlib import Path
 
 import pytest
 
-from unizo_ctem_mcp import environments as envs
-from unizo_ctem_mcp.config import Settings
+from unizo_mcp import environments as envs
+from unizo_mcp.config import Settings
 
 STAGING = {
     "description": "Acme staging",
-    "api_url": "https://ctem-staging.acme.com",
+    "api_url": "https://unizo-staging.acme.com",
     "sso_issuer": "https://acme.okta.com/oauth2/default",
     "sso_client_id": "0oa-staging",
-    "remote_mcp": {"url": "https://ctem-staging.acme.com/mcp", "client_id": "mcp-staging", "callback_port": 3118},
+    "remote_mcp": {"url": "https://unizo-staging.acme.com/mcp", "client_id": "mcp-staging", "callback_port": 3118},
 }
 PROD = {
-    "api_url": "https://ctem.acme.com",
+    "api_url": "https://unizo.acme.com",
     "sso_issuer": "https://login.example.com",
     "sso_client_id": "prod-client",
-    "remote_mcp": {"url": "https://ctem.acme.com/mcp", "client_id": "mcp-prod"},
+    "remote_mcp": {"url": "https://unizo.acme.com/mcp", "client_id": "mcp-prod"},
 }
 
 
@@ -69,7 +69,7 @@ class FakeClaude:
     [
         ({"api_url": "https://x", "api_token": "s3cret"}, "Secrets don't belong"),
         ({"api_url": "https://x", "cloud_url": "https://x"}, "unknown key(s) cloud_url"),
-        ({"remote_mcp": {"url": "http://ctem.acme.com/mcp"}}, "must start with https://"),
+        ({"remote_mcp": {"url": "http://unizo.acme.com/mcp"}}, "must start with https://"),
         ({"remote_mcp": {"client_id": "x"}}, "url is required"),
         ({"remote_mcp": {"url": "https://x/mcp", "clientId": "x"}}, "unknown key(s) clientId"),
         ({"remote_mcp": {"url": "https://x/mcp", "callback_port": "3118"}}, "callback_port must be"),
@@ -94,24 +94,24 @@ def test_remote_server_config_for_claude() -> None:
 
 
 def test_remote_without_gateway_sso_gets_no_headers_helper(tmp_path: Path, isolated_config: Path) -> None:
-    path = write(tmp_path / "e.json", {"ci": {"api_url": "https://ctem.acme.com", "remote_mcp": {"url": "https://x/mcp"}}})
+    path = write(tmp_path / "e.json", {"ci": {"api_url": "https://unizo.acme.com", "remote_mcp": {"url": "https://x/mcp"}}})
     claude = FakeClaude()
     envs.use("ci", file=path, run=claude, out=lambda _: None)
-    assert "headersHelper" not in claude.servers["unizo-ctem-cloud"]
+    assert "headersHelper" not in claude.servers["unizo-cloud"]
 
 
-# ── The active environment replaces the UNIZO_CTEM_* variables ──
+# ── The active environment replaces the UNIZO_* variables ──
 
 
 def plugin_options(monkeypatch: pytest.MonkeyPatch) -> None:
-    """UNIZO_CTEM_* variables a user exported earlier, for some other deployment."""
+    """UNIZO_* variables a user exported earlier, for some other deployment."""
     for var, value in {
-        "UNIZO_CTEM_API_URL": "https://old.example.com",
-        "UNIZO_CTEM_API_TOKEN": "old-token",
-        "UNIZO_CTEM_OIDC_ISSUER": "https://old-idp.example.com",
-        "UNIZO_CTEM_OIDC_CLIENT_ID": "old-client",
-        "UNIZO_CTEM_OIDC_AUDIENCE": "old-audience",
-        "UNIZO_CTEM_OIDC_REDIRECT_PORT": "9999",
+        "UNIZO_API_URL": "https://old.example.com",
+        "UNIZO_API_TOKEN": "old-token",
+        "UNIZO_OIDC_ISSUER": "https://old-idp.example.com",
+        "UNIZO_OIDC_CLIENT_ID": "old-client",
+        "UNIZO_OIDC_AUDIENCE": "old-audience",
+        "UNIZO_OIDC_REDIRECT_PORT": "9999",
     }.items():
         monkeypatch.setenv(var, value)
 
@@ -129,7 +129,7 @@ def test_active_environment_replaces_every_plugin_option(
     envs.use("staging", file=env_file, run=FakeClaude(), out=lambda _: None)
     s = Settings.from_env()
     assert s.environment == "staging" and s.environment_source == str(env_file)
-    assert s.api_url == "https://ctem-staging.acme.com"
+    assert s.api_url == "https://unizo-staging.acme.com"
     assert s.oidc.issuer == STAGING["sso_issuer"] and s.oidc.client_id == "0oa-staging"
     # Nothing carries over from the old options: unset keys fall back to defaults, and the token isn't sent.
     assert s.api_token == "" and s.auth_mode == "sso"
@@ -140,7 +140,7 @@ def test_plugin_secrets_only_when_the_environment_opts_in(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     plugin_options(monkeypatch)
-    env_file = write(tmp_path / "e.json", {"ci": {"api_url": "https://ctem.acme.com", "use_env_secrets": True}})
+    env_file = write(tmp_path / "e.json", {"ci": {"api_url": "https://unizo.acme.com", "use_env_secrets": True}})
     envs.use("ci", file=env_file, run=FakeClaude(), out=lambda _: None)
     s = Settings.from_env()
     assert s.api_token == "old-token" and s.auth_mode == "static-token"
@@ -150,7 +150,7 @@ def test_old_use_plugin_secrets_key_still_works(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     plugin_options(monkeypatch)
-    env_file = write(tmp_path / "e.json", {"ci": {"api_url": "https://ctem.acme.com", "use_plugin_secrets": True}})
+    env_file = write(tmp_path / "e.json", {"ci": {"api_url": "https://unizo.acme.com", "use_plugin_secrets": True}})
     envs.use("ci", file=env_file, run=FakeClaude(), out=lambda _: None)
     assert Settings.from_env().api_token == "old-token"
 
@@ -182,13 +182,13 @@ def test_deleted_environments_file_is_reported_not_fatal(
 def test_use_registers_the_remote_server_with_its_client_id(env_file: Path) -> None:
     claude = FakeClaude()
     envs.use("staging", file=env_file, run=claude, out=lambda _: None)
-    assert claude.servers["unizo-ctem-cloud"] == {
+    assert claude.servers["unizo-cloud"] == {
         "type": "http",
-        "url": "https://ctem-staging.acme.com/mcp",
-        "headersHelper": f"uv run --quiet --project {envs.MCP_SERVER_DIR} unizo-ctem-mcp headers",
+        "url": "https://unizo-staging.acme.com/mcp",
+        "headersHelper": f"uv run --quiet --project {envs.MCP_SERVER_DIR} unizo-mcp headers",
         "oauth": {"clientId": "mcp-staging", "callbackPort": 3118},
     }
-    assert ["claude", "mcp", "add-json", "--scope", "user", "unizo-ctem-cloud"] == claude.calls[-1][:6]
+    assert ["claude", "mcp", "add-json", "--scope", "user", "unizo-cloud"] == claude.calls[-1][:6]
     assert envs.read_state()["name"] == "staging"
 
 
@@ -198,7 +198,7 @@ def test_switching_signs_out_the_old_remote_and_replaces_it(env_file: Path) -> N
     claude.calls.clear()
     envs.use("prod", file=env_file, run=claude, out=lambda _: None)
     assert claude.subcommands() == ["get", "logout", "remove", "add-json"]
-    assert claude.servers["unizo-ctem-cloud"]["oauth"] == {"clientId": "mcp-prod"}
+    assert claude.servers["unizo-cloud"]["oauth"] == {"clientId": "mcp-prod"}
 
 
 def test_reapplying_the_same_environment_keeps_the_remote_sign_in(env_file: Path) -> None:
@@ -214,17 +214,17 @@ def test_environment_without_remote_removes_it(isolated_config: Path, env_file: 
     envs.use("staging", file=env_file, run=claude, out=lambda _: None)
     write(env_file, {"staging": STAGING, "local": {"api_url": "http://127.0.0.1:9401"}})
     envs.use("local", file=env_file, run=claude, out=lambda _: None)
-    assert "unizo-ctem-cloud" not in claude.servers
+    assert "unizo-cloud" not in claude.servers
     assert envs.read_state()["remote_registered"] is False
 
 
 def test_wont_replace_a_server_it_did_not_add(env_file: Path) -> None:
-    claude = FakeClaude({"unizo-ctem-cloud": {"type": "http", "url": "https://someone-elses/mcp"}})
+    claude = FakeClaude({"unizo-cloud": {"type": "http", "url": "https://someone-elses/mcp"}})
     with pytest.raises(envs.EnvConfigError, match="already exists"):
         envs.use("staging", file=env_file, run=claude, out=lambda _: None)
-    assert claude.servers["unizo-ctem-cloud"]["url"] == "https://someone-elses/mcp"
+    assert claude.servers["unizo-cloud"]["url"] == "https://someone-elses/mcp"
     envs.use("staging", file=env_file, force=True, run=claude, out=lambda _: None)
-    assert claude.servers["unizo-ctem-cloud"]["url"] == "https://ctem-staging.acme.com/mcp"
+    assert claude.servers["unizo-cloud"]["url"] == "https://unizo-staging.acme.com/mcp"
 
 
 def test_unknown_environment(env_file: Path) -> None:
@@ -249,7 +249,7 @@ def test_off_restores_plugin_options_and_removes_remote(monkeypatch: pytest.Monk
     claude = FakeClaude()
     envs.use("staging", file=env_file, run=claude, out=lambda _: None)
     envs.off(run=claude, out=lambda _: None)
-    assert "unizo-ctem-cloud" not in claude.servers and envs.read_state() is None
+    assert "unizo-cloud" not in claude.servers and envs.read_state() is None
     assert Settings.from_env().api_url == "https://old.example.com"
 
 
@@ -264,13 +264,13 @@ def test_cli_list_marks_active(env_file: Path, capsys: pytest.CaptureFixture[str
 
 def test_cli_usage_and_errors(capsys: pytest.CaptureFixture[str]) -> None:
     assert envs.cli(["frobnicate"]) == 2
-    assert "usage: unizo-ctem-mcp env" in capsys.readouterr().err
+    assert "usage: unizo-mcp env" in capsys.readouterr().err
     capsys.readouterr()
 
 
 def test_list_and_use_need_a_file(env_file: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """There is no default environments file, not even when one exists in the config folder."""
-    write(env_file.parent.parent / "config" / "unizo-ctem-mcp" / "environments.json", {"staging": STAGING})
+    write(env_file.parent.parent / "config" / "unizo-mcp" / "environments.json", {"staging": STAGING})
     assert envs.cli(["list"]) == 1
     assert "list needs --file" in capsys.readouterr().err
     assert envs.cli(["use", "staging"]) == 1
@@ -288,7 +288,7 @@ def test_use_with_file_reads_only_that_file(tmp_path: Path, env_file: Path) -> N
     fake = FakeClaude()
     env = envs.use("qa", file=custom, run=fake, out=lambda _: None)
     assert env.source == custom
-    assert fake.servers["unizo-ctem-cloud"]["url"] == PROD["remote_mcp"]["url"]
+    assert fake.servers["unizo-cloud"]["url"] == PROD["remote_mcp"]["url"]
     assert envs.active_environment().name == "qa"
     with pytest.raises(envs.EnvConfigError, match=r'No environment named "staging".*acme\.json'):
         envs.use("staging", file=custom, run=fake, out=lambda _: None)
@@ -335,4 +335,4 @@ def test_setup_done_is_recorded_and_reset_by_the_next_switch(env_file: Path) -> 
 
 def test_setup_done_needs_an_active_environment(capsys: pytest.CaptureFixture[str]) -> None:
     assert envs.cli(["setup-done"]) == 1
-    assert "No CTEM environment is active" in capsys.readouterr().err
+    assert "No Unizo environment is active" in capsys.readouterr().err

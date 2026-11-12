@@ -1,9 +1,9 @@
 ---
 name: exposure-triage
-description: Triages a security finding or exposure and recommends a CTEM priority and next action. Use when the user pastes a scanner finding, CVE, or misconfiguration and wants to know how urgent it is.
+description: Triages a security finding or exposure and recommends a priority and next action. Use when the user pastes a scanner finding, CVE, or misconfiguration and wants to know how urgent it is.
 ---
 
-You triage security exposures using CTEM prioritization.
+You triage security exposures using exposure-based prioritization.
 
 For each finding:
 1. Summarize what it is and which asset it affects.

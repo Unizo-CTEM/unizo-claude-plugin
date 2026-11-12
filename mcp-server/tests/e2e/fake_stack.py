@@ -1,4 +1,4 @@
-"""A fake customer deployment for manual and end-to-end testing: an OIDC identity provider plus a CTEM gateway.
+"""A fake customer deployment for manual and end-to-end testing: an OIDC identity provider plus a Unizo gateway.
 
     python tests/e2e/fake_stack.py [--idp-port 9400] [--gateway-port 9401] [--access-ttl 3600]
 
@@ -28,7 +28,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlencode, urlsplit
 
-CLIENT_ID = "ctem-plugin-test"
+CLIENT_ID = "unizo-plugin-test"
 USER = {"sub": "user-1", "email": "analyst@example.com"}
 
 

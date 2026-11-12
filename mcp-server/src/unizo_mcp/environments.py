@@ -1,19 +1,19 @@
-"""Named CTEM environments (demo, staging, prod, ...) and switching between them.
+"""Named Unizo environments (demo, staging, prod, ...) and switching between them.
 
-An environments file lists, per environment, the gateway/SSO settings for the local ``unizo-ctem`` server and the remote
-MCP server (URL and OAuth client ID). ``unizo-ctem-mcp env use <name>`` makes one active:
+An environments file lists, per environment, the gateway/SSO settings for the local ``unizo`` server and the remote
+MCP server (URL and OAuth client ID). ``unizo-mcp env use <name>`` makes one active:
 
-* the local ``unizo-ctem`` server reads the active environment at startup (see ``Settings.from_env``), so nothing is
+* the local ``unizo`` server reads the active environment at startup (see ``Settings.from_env``), so nothing is
   written anywhere else, and nothing from an earlier environment leaks into the next.
-* the remote server is registered at user scope as ``unizo-ctem-cloud`` with ``claude mcp add-json``, because Claude Code
+* the remote server is registered at user scope as ``unizo-cloud`` with ``claude mcp add-json``, because Claude Code
   doesn't substitute environment variables into ``oauth.clientId``.
 
 There is no default environments file: the user always names one with ``--file <path>``
 (``env list --file <path>``, ``env use <name> --file <path>``). The active environment remembers the file it came
 from and is read from that file only.
 
-Secrets never go in these files: ``api_token`` and ``sso_client_secret`` come from the ``UNIZO_CTEM_API_TOKEN`` /
-``UNIZO_CTEM_OIDC_CLIENT_SECRET`` environment variables, and only for environments that set ``use_env_secrets``.
+Secrets never go in these files: ``api_token`` and ``sso_client_secret`` come from the ``UNIZO_API_TOKEN`` /
+``UNIZO_OIDC_CLIENT_SECRET`` environment variables, and only for environments that set ``use_env_secrets``.
 """
 
 from __future__ import annotations
@@ -30,19 +30,19 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-REMOTE_SERVER_NAME = "unizo-ctem-cloud"
+REMOTE_SERVER_NAME = "unizo-cloud"
 
 # Environment key -> the variable the server reads (the same names the plugin's .mcp.json sets).
 SETTING_VARS = {
-    "api_url": "UNIZO_CTEM_API_URL",
-    "sso_issuer": "UNIZO_CTEM_OIDC_ISSUER",
-    "sso_client_id": "UNIZO_CTEM_OIDC_CLIENT_ID",
-    "sso_scopes": "UNIZO_CTEM_OIDC_SCOPES",
-    "sso_audience": "UNIZO_CTEM_OIDC_AUDIENCE",
-    "sso_token_type": "UNIZO_CTEM_OIDC_TOKEN_TYPE",
-    "sso_redirect_port": "UNIZO_CTEM_OIDC_REDIRECT_PORT",
+    "api_url": "UNIZO_API_URL",
+    "sso_issuer": "UNIZO_OIDC_ISSUER",
+    "sso_client_id": "UNIZO_OIDC_CLIENT_ID",
+    "sso_scopes": "UNIZO_OIDC_SCOPES",
+    "sso_audience": "UNIZO_OIDC_AUDIENCE",
+    "sso_token_type": "UNIZO_OIDC_TOKEN_TYPE",
+    "sso_redirect_port": "UNIZO_OIDC_REDIRECT_PORT",
 }
-SECRET_VARS = {"api_token": "UNIZO_CTEM_API_TOKEN", "sso_client_secret": "UNIZO_CTEM_OIDC_CLIENT_SECRET"}
+SECRET_VARS = {"api_token": "UNIZO_API_TOKEN", "sso_client_secret": "UNIZO_OIDC_CLIENT_SECRET"}
 OTHER_KEYS = {"description", "remote_mcp", "use_env_secrets", "use_plugin_secrets"}
 # ``use_plugin_secrets`` is the old name of ``use_env_secrets`` (from when secrets were plugin options).
 REMOTE_KEYS = {"url", "client_id", "callback_port", "scopes"}
@@ -86,11 +86,11 @@ class Environment:
     """Settings keyed ``api_url``, ``sso_issuer``, ..."""
     remote: RemoteMcp | None = None
     use_env_secrets: bool = False
-    """If true, ``UNIZO_CTEM_API_TOKEN`` / ``UNIZO_CTEM_OIDC_CLIENT_SECRET`` from the environment are used with this one.
+    """If true, ``UNIZO_API_TOKEN`` / ``UNIZO_OIDC_CLIENT_SECRET`` from the environment are used with this one.
     Off by default, so a token set for one deployment is never sent to another."""
 
     def apply_to(self, env: Mapping[str, str]) -> dict[str, str]:
-        """Returns ``env`` with this environment's settings in place of any ``UNIZO_CTEM_*`` variables.
+        """Returns ``env`` with this environment's settings in place of any ``UNIZO_*`` variables.
 
         Every setting the environment leaves out falls back to the server default, not to the variable, so
         nothing carries over from whatever was configured before."""
@@ -108,7 +108,7 @@ class Environment:
 
 def config_dir() -> Path:
     base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(base) / "unizo-ctem-mcp"
+    return Path(base) / "unizo-mcp"
 
 
 def resolve_file(path: str | Path) -> Path:
@@ -146,7 +146,7 @@ def _parse_environment(name: str, raw: Any, path: Path) -> Environment:
     if secrets:
         raise EnvConfigError(
             f"{where} contains {', '.join(secrets)}. Secrets don't belong in this file: export them as "
-            'UNIZO_CTEM_API_TOKEN / UNIZO_CTEM_OIDC_CLIENT_SECRET before starting Claude Code and add '
+            'UNIZO_API_TOKEN / UNIZO_OIDC_CLIENT_SECRET before starting Claude Code and add '
             '"use_env_secrets": true to the environment.'
         )
     unknown = sorted(set(raw) - set(SETTING_VARS) - OTHER_KEYS)
@@ -214,21 +214,21 @@ def read_state() -> dict[str, Any] | None:
 
 
 def active_environment() -> Environment | None:
-    """The environment chosen with ``unizo-ctem-mcp env use``, or None. Raises EnvConfigError if it's broken."""
+    """The environment chosen with ``unizo-mcp env use``, or None. Raises EnvConfigError if it's broken."""
     state = read_state()
     if state is None:
         return None
     name = state["name"]
     source = Path(state["source"]) if isinstance(state.get("source"), str) else None
-    pick_again = "Run /unizo-ctem:unizo-ctem-plugin-configure <environments.json> to pick an environment again."
+    pick_again = "Run /unizo:unizo-plugin-configure <environments.json> to pick an environment again."
     if source is None or not source.is_file():
         raise EnvConfigError(
-            f'The environments file of the active CTEM environment "{name}" ({source or "unknown"}) is missing. '
+            f'The environments file of the active Unizo environment "{name}" ({source or "unknown"}) is missing. '
             + pick_again
         )
     found = parse_file(source)
     if name not in found:
-        raise EnvConfigError(f'The active CTEM environment "{name}" is no longer in {source}. ' + pick_again)
+        raise EnvConfigError(f'The active Unizo environment "{name}" is no longer in {source}. ' + pick_again)
     return found[name]
 
 
@@ -254,7 +254,7 @@ def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def _remote_registered(run: Runner) -> bool:
-    """Whether a user-scope ``unizo-ctem-cloud`` server exists."""
+    """Whether a user-scope ``unizo-cloud`` server exists."""
     result = run(["claude", "mcp", "get", REMOTE_SERVER_NAME])
     return result.returncode == 0 and "Scope: User" in result.stdout
 
@@ -268,7 +268,7 @@ def _headers_helper(env: Environment) -> str:
     environment has no SSO (then the remote server signs in with its own OAuth)."""
     if not (env.settings.get("sso_issuer") and env.settings.get("sso_client_id")):
         return ""
-    return f"uv run --quiet --project {shlex.quote(str(MCP_SERVER_DIR))} unizo-ctem-mcp headers"
+    return f"uv run --quiet --project {shlex.quote(str(MCP_SERVER_DIR))} unizo-mcp headers"
 
 
 def use(
@@ -293,7 +293,7 @@ def use(
     if exists and not owned and not force:
         raise EnvConfigError(
             f'A user-scope MCP server named "{REMOTE_SERVER_NAME}" already exists and wasn\'t added by this '
-            "command. Remove it (claude mcp remove --scope user unizo-ctem-cloud) or run again with --force to replace it."
+            "command. Remove it (claude mcp remove --scope user unizo-cloud) or run again with --force to replace it."
         )
 
     previous_remote = (state or {}).get("remote")
@@ -320,7 +320,7 @@ def use(
             "activated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         }
     )
-    out(f'Active CTEM environment: {env.name}{f" ({env.description})" if env.description else ""}')
+    out(f'Active Unizo environment: {env.name}{f" ({env.description})" if env.description else ""}')
     out(f"  gateway:    {env.settings.get('api_url') or '(not set)'}")
     out(f"  sso issuer: {env.settings.get('sso_issuer') or '(not set)'}")
     if env.remote:
@@ -328,32 +328,32 @@ def use(
         out(f"  remote MCP: {env.remote.url}  client ID: {cid}")
     else:
         out("  remote MCP: none")
-    out("Restart Claude Code to apply. Then sign in: /unizo-ctem:unizo-ctem-plugin-configure for the gateway, /mcp -> unizo-ctem-cloud for the "
+    out("Restart Claude Code to apply. Then sign in: /unizo:unizo-plugin-configure for the gateway, /mcp -> unizo-cloud for the "
         "remote server.")
     return env
 
 
 def off(*, run: Runner = _run, out: Callable[[str], None] = print) -> None:
-    """Deactivates environments: the UNIZO_CTEM_* variables apply again, and the remote server this command added is removed."""
+    """Deactivates environments: the UNIZO_* variables apply again, and the remote server this command added is removed."""
     state = read_state()
     if state is None:
-        out("No CTEM environment is active; UNIZO_CTEM_* environment variables apply, if set.")
+        out("No Unizo environment is active; UNIZO_* environment variables apply, if set.")
         return
     if state.get("remote_registered") and _remote_registered(run):
         run(["claude", "mcp", "logout", REMOTE_SERVER_NAME])
         run(["claude", "mcp", "remove", "--scope", "user", REMOTE_SERVER_NAME])
     _write_state(None)
-    out(f'Deactivated environment "{state["name"]}". UNIZO_CTEM_* environment variables apply again, if set.')
+    out(f'Deactivated environment "{state["name"]}". UNIZO_* environment variables apply again, if set.')
     out("Restart Claude Code to apply.")
 
 
 def mark_setup_complete(*, out: Callable[[str], None] = print) -> None:
-    """Records that /unizo-ctem:unizo-ctem-plugin-configure finished for the active environment, so the onboarding hook goes quiet.
+    """Records that /unizo:unizo-plugin-configure finished for the active environment, so the onboarding hook goes quiet.
 
     Switching environments rewrites the state without this flag, so the next environment is set up again."""
     state = read_state()
     if state is None:
-        raise EnvConfigError("No CTEM environment is active. Run /unizo-ctem:unizo-ctem-plugin-configure to pick one first.")
+        raise EnvConfigError("No Unizo environment is active. Run /unizo:unizo-plugin-configure to pick one first.")
     state["setup_complete"] = True
     state["setup_completed_at"] = datetime.now(UTC).isoformat(timespec="seconds")
     _write_state(state)
@@ -364,16 +364,16 @@ def _detail(result: subprocess.CompletedProcess[str]) -> str:
     return (result.stderr or result.stdout).strip() or f"exit code {result.returncode}"
 
 
-# ── CLI: unizo-ctem-mcp env ... ─────────────────────────────────────────────────────────────────────────────────────
+# ── CLI: unizo-mcp env ... ─────────────────────────────────────────────────────────────────────────────────────
 
-USAGE = """usage: unizo-ctem-mcp env [list --file <path> | current | use <name> --file <path> [--force] | off | setup-done]
+USAGE = """usage: unizo-mcp env [list --file <path> | current | use <name> --file <path> [--force] | off | setup-done]
 
   list           environments in the file (* marks the active one)
   --file <path>  the environments file to read (required for list and use; there is no default file)
   current        the active environment and where it's defined
-  use <name>     make <name> active and register its remote MCP server as unizo-ctem-cloud
-  off            go back to UNIZO_CTEM_* env vars; remove the unizo-ctem-cloud server this command added
-  setup-done     record that /unizo-ctem:unizo-ctem-plugin-configure finished for the active environment"""
+  use <name>     make <name> active and register its remote MCP server as unizo-cloud
+  off            go back to UNIZO_* env vars; remove the unizo-cloud server this command added
+  setup-done     record that /unizo:unizo-plugin-configure finished for the active environment"""
 
 NEEDS_FILE = "{command} needs --file <path-to-environments.json>. There is no default environments file."
 
@@ -422,7 +422,7 @@ def cli(args: list[str]) -> int:
         if command == "current":
             state = read_state()
             if state is None:
-                print("No CTEM environment is active; UNIZO_CTEM_* environment variables apply, if set.")
+                print("No Unizo environment is active; UNIZO_* environment variables apply, if set.")
                 return 0
             env = active_environment()
             assert env is not None

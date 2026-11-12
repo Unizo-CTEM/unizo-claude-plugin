@@ -16,10 +16,10 @@ import httpx2
 import pytest
 from mcp import Client
 
-from unizo_ctem_mcp.auth import OidcAuth, TokenSet, TokenStore
-from unizo_ctem_mcp.client import UnizoCtemApiError, UnizoCtemClient
-from unizo_ctem_mcp.config import OidcSettings, Settings
-from unizo_ctem_mcp.server import build_server
+from unizo_mcp.auth import OidcAuth, TokenSet, TokenStore
+from unizo_mcp.client import UnizoApiError, UnizoClient
+from unizo_mcp.config import OidcSettings, Settings
+from unizo_mcp.server import build_server
 
 pytestmark = pytest.mark.anyio
 ISSUER = "https://sso.example.com"
@@ -76,9 +76,9 @@ class FakeIdP:
 def oidc_settings(tmp_path: Path, **overrides) -> OidcSettings:
     return OidcSettings(
         issuer=ISSUER,
-        client_id="ctem-cli",
+        client_id="unizo-cli",
         redirect_port=free_port(),
-        token_cache=tmp_path / "ctem" / "tokens.json",
+        token_cache=tmp_path / "unizo" / "tokens.json",
         **overrides,
     )
 
@@ -155,22 +155,22 @@ async def test_idp_error_is_reported(tmp_path: Path) -> None:
 async def test_expired_token_is_refreshed_and_old_refresh_token_kept(tmp_path: Path) -> None:
     idp = FakeIdP(rotate_refresh=False)
     settings = oidc_settings(tmp_path)
-    TokenStore(settings.token_cache, f"{ISSUER}|ctem-cli").save(
+    TokenStore(settings.token_cache, f"{ISSUER}|unizo-cli").save(
         TokenSet(access_token="old", refresh_token="keep-me", expires_at=1.0)
     )
     auth = OidcAuth(settings, transport=idp.transport)
 
     assert await auth.bearer_token() == "tok-1"
-    assert idp.token_requests[0] == {"grant_type": "refresh_token", "refresh_token": "keep-me", "client_id": "ctem-cli"}
+    assert idp.token_requests[0] == {"grant_type": "refresh_token", "refresh_token": "keep-me", "client_id": "unizo-cli"}
     assert await auth.bearer_token() == "tok-1"  # cached, no second refresh
     assert len(idp.token_requests) == 1
-    assert TokenStore(settings.token_cache, f"{ISSUER}|ctem-cli").load().refresh_token == "keep-me"
+    assert TokenStore(settings.token_cache, f"{ISSUER}|unizo-cli").load().refresh_token == "keep-me"
     await auth.aclose()
 
 
 async def test_failed_refresh_clears_cache(tmp_path: Path) -> None:
     settings = oidc_settings(tmp_path)
-    TokenStore(settings.token_cache, f"{ISSUER}|ctem-cli").save(
+    TokenStore(settings.token_cache, f"{ISSUER}|unizo-cli").save(
         TokenSet(access_token="old", refresh_token="revoked", expires_at=1.0)
     )
     auth = OidcAuth(settings, transport=FakeIdP(refresh_fails=True).transport)
@@ -203,13 +203,13 @@ def gateway(seen: list[httpx2.Request], reject: set[str] = frozenset()) -> httpx
 
 async def test_client_retries_once_with_refreshed_token(tmp_path: Path) -> None:
     oidc = oidc_settings(tmp_path)
-    TokenStore(oidc.token_cache, f"{ISSUER}|ctem-cli").save(
+    TokenStore(oidc.token_cache, f"{ISSUER}|unizo-cli").save(
         TokenSet(access_token="revoked-at-gateway", refresh_token="r", expires_at=4_000_000_000)
     )
     auth = OidcAuth(oidc, transport=FakeIdP().transport)
     seen: list[httpx2.Request] = []
-    settings = Settings(api_url="https://ctem.example", api_token="", oidc=oidc)
-    client = UnizoCtemClient(settings, transport=gateway(seen, reject={"revoked-at-gateway"}), auth=auth)
+    settings = Settings(api_url="https://unizo.example", api_token="", oidc=oidc)
+    client = UnizoClient(settings, transport=gateway(seen, reject={"revoked-at-gateway"}), auth=auth)
 
     assert await client.get("/health") == {"status": "UP"}
     assert [r.headers["Authorization"] for r in seen] == ["Bearer revoked-at-gateway", "Bearer tok-1"]
@@ -220,8 +220,8 @@ async def test_client_retries_once_with_refreshed_token(tmp_path: Path) -> None:
 async def test_client_asks_for_login_when_no_tokens(tmp_path: Path) -> None:
     oidc = oidc_settings(tmp_path)
     auth = OidcAuth(oidc, transport=FakeIdP().transport)
-    client = UnizoCtemClient(Settings(api_url="https://ctem.example", api_token="", oidc=oidc), auth=auth)
-    with pytest.raises(UnizoCtemApiError, match="unizo_ctem_login"):
+    client = UnizoClient(Settings(api_url="https://unizo.example", api_token="", oidc=oidc), auth=auth)
+    with pytest.raises(UnizoApiError, match="unizo_login"):
         await client.get("/health")
     await client.aclose()
     await auth.aclose()
@@ -230,8 +230,8 @@ async def test_client_asks_for_login_when_no_tokens(tmp_path: Path) -> None:
 async def test_static_token_wins_over_sso(tmp_path: Path) -> None:
     seen: list[httpx2.Request] = []
     oidc = oidc_settings(tmp_path)
-    settings = Settings(api_url="https://ctem.example", api_token="ci-token", oidc=oidc)
-    client = UnizoCtemClient(settings, transport=gateway(seen), auth=OidcAuth(oidc, transport=FakeIdP().transport))
+    settings = Settings(api_url="https://unizo.example", api_token="ci-token", oidc=oidc)
+    client = UnizoClient(settings, transport=gateway(seen), auth=OidcAuth(oidc, transport=FakeIdP().transport))
     await client.get("/health")
     assert seen[0].headers["Authorization"] == "Bearer ci-token"
     await client.aclose()
@@ -242,14 +242,14 @@ async def test_login_and_status_tools(tmp_path: Path) -> None:
     open_url, _ = browser()
     auth = OidcAuth(oidc, transport=FakeIdP().transport, open_browser=open_url)
     seen: list[httpx2.Request] = []
-    settings = Settings(api_url="https://ctem.example", api_token="", oidc=oidc)
-    server = build_server(settings, UnizoCtemClient(settings, transport=gateway(seen), auth=auth), auth=auth)
+    settings = Settings(api_url="https://unizo.example", api_token="", oidc=oidc)
+    server = build_server(settings, UnizoClient(settings, transport=gateway(seen), auth=auth), auth=auth)
 
     async with Client(server) as mcp:
-        before = json.loads((await mcp.call_tool("unizo_ctem_status", {})).content[0].text)
-        login = json.loads((await mcp.call_tool("unizo_ctem_login", {"wait_seconds": 5})).content[0].text)
-        after = json.loads((await mcp.call_tool("unizo_ctem_status", {})).content[0].text)
-        logout = json.loads((await mcp.call_tool("unizo_ctem_logout", {})).content[0].text)
+        before = json.loads((await mcp.call_tool("unizo_status", {})).content[0].text)
+        login = json.loads((await mcp.call_tool("unizo_login", {"wait_seconds": 5})).content[0].text)
+        after = json.loads((await mcp.call_tool("unizo_status", {})).content[0].text)
+        logout = json.loads((await mcp.call_tool("unizo_logout", {})).content[0].text)
 
     assert before["auth_mode"] == "sso" and before["sso"]["logged_in"] is False and before["reachable"] is False
     assert login["logged_in"] is True and login["subject"] == "analyst@example.com"
@@ -258,15 +258,15 @@ async def test_login_and_status_tools(tmp_path: Path) -> None:
 
 
 async def test_status_reports_sso_state_after_health_check(tmp_path: Path) -> None:
-    """unizo_ctem_status must describe the session as it is after the call (refreshed or cleared), not before."""
+    """unizo_status must describe the session as it is after the call (refreshed or cleared), not before."""
     oidc = oidc_settings(tmp_path)
-    TokenStore(oidc.token_cache, f"{ISSUER}|ctem-cli").save(
+    TokenStore(oidc.token_cache, f"{ISSUER}|unizo-cli").save(
         TokenSet(access_token="stale", refresh_token="revoked", expires_at=1.0)
     )
     auth = OidcAuth(oidc, transport=FakeIdP(refresh_fails=True).transport)
-    settings = Settings(api_url="https://ctem.example", api_token="", oidc=oidc)
-    server = build_server(settings, UnizoCtemClient(settings, transport=gateway([]), auth=auth), auth=auth)
+    settings = Settings(api_url="https://unizo.example", api_token="", oidc=oidc)
+    server = build_server(settings, UnizoClient(settings, transport=gateway([]), auth=auth), auth=auth)
     async with Client(server) as mcp:
-        status = json.loads((await mcp.call_tool("unizo_ctem_status", {})).content[0].text)
-    assert status["reachable"] is False and "unizo_ctem_login" in status["detail"]
+        status = json.loads((await mcp.call_tool("unizo_status", {})).content[0].text)
+    assert status["reachable"] is False and "unizo_login" in status["detail"]
     assert status["sso"]["logged_in"] is False

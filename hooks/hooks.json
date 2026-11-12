@@ -1,5 +1,5 @@
 {
-  "description": "Onboarding at session start: points to /unizo-ctem:unizo-ctem-plugin-configure until an environment is picked, then starts both sign-ins automatically after the restart. CTEM guard: blocks ticket moves, requires preview_commit before commit_actions, asks before every unizo-ctem-cloud write, and audits writes to ~/.config/unizo-ctem-mcp/audit.jsonl",
+  "description": "Onboarding at session start: points to /unizo:unizo-plugin-configure until an environment is picked, then starts both sign-ins automatically after the restart. Unizo guard: blocks ticket moves, requires preview_commit before commit_actions, asks before every unizo-cloud write, and audits writes to ~/.config/unizo-mcp/audit.jsonl",
   "hooks": {
     "SessionStart": [
       {
@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/unizo_ctem_onboard.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/unizo_onboard.py\"",
             "timeout": 5
           }
         ]
@@ -15,11 +15,11 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "mcp__unizo-ctem-cloud__.*",
+        "matcher": "mcp__unizo-cloud__.*",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/unizo_ctem_guard.py\" pre",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/unizo_guard.py\" pre",
             "timeout": 10
           }
         ]
@@ -27,11 +27,11 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "mcp__unizo-ctem-cloud__.*",
+        "matcher": "mcp__unizo-cloud__.*",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/unizo_ctem_guard.py\" post",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/unizo_guard.py\" post",
             "timeout": 10
           }
         ]

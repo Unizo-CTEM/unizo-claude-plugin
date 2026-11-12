@@ -1,9 +1,9 @@
 ---
-description: Work your Unizo CTEM review queue - Investigations awaiting review, mine or unclaimed (W1)
+description: Work your Unizo review queue - Investigations awaiting review, mine or unclaimed (W1)
 argument-hint: "[mine | unclaimed] [crown] [kev] [INV-id]"
 ---
 
-Work the user's review queue with the `unizo-ctem-review-queue` skill.
+Work the user's review queue with the `unizo-review-queue` skill.
 
 Arguments: `$ARGUMENTS`
 

@@ -1,4 +1,4 @@
-"""SSO for the CTEM gateway: OAuth 2.0 authorization code + PKCE against any OIDC provider.
+"""SSO for the Unizo gateway: OAuth 2.0 authorization code + PKCE against any OIDC provider.
 
 Flow: ``begin_login`` starts a one-shot HTTP listener on ``localhost:{redirect_port}``, builds the authorize URL
 and (optionally) opens the browser. The IdP redirects back to ``/callback`` with a code, which is exchanged for
@@ -28,7 +28,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 import httpx2
 
-from unizo_ctem_mcp.config import OidcSettings
+from unizo_mcp.config import OidcSettings
 
 EXPIRY_SKEW_SECONDS = 60
 
@@ -125,7 +125,7 @@ class OidcAuth:
             except httpx2.HTTPError as e:
                 raise SsoError(f"Could not reach the SSO provider at {url}: {e}") from e
             if r.status_code != 200:
-                raise SsoError(f"OIDC discovery failed at {url}: HTTP {r.status_code}. Check UNIZO_CTEM_OIDC_ISSUER.")
+                raise SsoError(f"OIDC discovery failed at {url}: HTTP {r.status_code}. Check UNIZO_OIDC_ISSUER.")
             self._metadata = r.json()
         return self._metadata
 
@@ -156,7 +156,7 @@ class OidcAuth:
         elif body.get("expires_in"):
             tokens.expires_at = self._clock() + float(body["expires_in"])
         if not self._bearer(tokens):
-            raise SsoError(f"The SSO provider returned no {self.settings.token_type} token. Check UNIZO_CTEM_OIDC_SCOPES.")
+            raise SsoError(f"The SSO provider returned no {self.settings.token_type} token. Check UNIZO_OIDC_SCOPES.")
         return tokens
 
     def _bearer(self, tokens: TokenSet) -> str:
@@ -314,7 +314,7 @@ class OidcAuth:
                     return
                 if not code_future.done():
                     code_future.set_result(query["code"])
-                await _respond(writer, 200, "Logged in to Unizo CTEM. You can close this tab and return to Claude.")
+                await _respond(writer, 200, "Logged in to Unizo. You can close this tab and return to Claude.")
             except (TimeoutError, ConnectionError):
                 pass
             finally:
@@ -325,13 +325,13 @@ class OidcAuth:
         except OSError as e:
             raise SsoError(
                 f"Could not listen on localhost:{self.settings.redirect_port} for the SSO callback ({e}). "
-                "Close whatever is using it or set UNIZO_CTEM_OIDC_REDIRECT_PORT (and register the new redirect URI)."
+                "Close whatever is using it or set UNIZO_OIDC_REDIRECT_PORT (and register the new redirect URI)."
             ) from e
 
 
 async def _respond(writer: asyncio.StreamWriter, status: int, message: str) -> None:
     reason = {200: "OK", 400: "Bad Request", 404: "Not Found"}[status]
-    body = f"<!doctype html><meta charset=utf-8><title>Unizo CTEM</title><p>{html.escape(message)}</p>".encode()
+    body = f"<!doctype html><meta charset=utf-8><title>Unizo</title><p>{html.escape(message)}</p>".encode()
     writer.write(
         f"HTTP/1.1 {status} {reason}\r\nContent-Type: text/html; charset=utf-8\r\n"
         f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n".encode()

@@ -1,4 +1,4 @@
-"""Keeps every test away from the user's real ~/.config/unizo-ctem-mcp (active environment, sign-in tokens)."""
+"""Keeps every test away from the user's real ~/.config/unizo-mcp (active environment, sign-in tokens)."""
 
 from __future__ import annotations
 

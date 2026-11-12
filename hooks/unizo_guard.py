@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Guard hook for the remote ``unizo-ctem-cloud`` MCP server's tools.
+"""Guard hook for the remote ``unizo-cloud`` MCP server's tools.
 
-Claude Code runs this for every ``mcp__unizo-ctem-cloud__*`` call (see hooks.json):
+Claude Code runs this for every ``mcp__unizo-cloud__*`` call (see hooks.json):
 
-    unizo_ctem_guard.py pre    PreToolUse:  block, ask or let the call through
-    unizo_ctem_guard.py post   PostToolUse: remember previews, audit writes
+    unizo_guard.py pre    PreToolUse:  block, ask or let the call through
+    unizo_guard.py post   PostToolUse: remember previews, audit writes
 
 Rules (from the Unizo MCP Server Tool Catalog):
 
@@ -12,7 +12,7 @@ Rules (from the Unizo MCP Server Tool Catalog):
 * ``commit_actions`` is denied unless ``preview_commit`` ran in this session, recently, for the same
   Investigation and plan, covering every action being committed. When it did, the user is still asked.
 * Every other write asks the user first. Reads pass silently.
-* Every write that ran is appended to ``<config>/unizo-ctem-mcp/audit.jsonl``.
+* Every write that ran is appended to ``<config>/unizo-mcp/audit.jsonl``.
 
 Standard library only, so it runs with any python3. It never raises: a hook crash must not break the session,
 but for ``commit_actions`` an internal error falls back to asking, never to allowing.
@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-PREFIX = "mcp__unizo-ctem-cloud__"
+PREFIX = "mcp__unizo-cloud__"
 PREVIEW_TTL_SECONDS = 30 * 60
 
 DENIED = {
@@ -64,7 +64,7 @@ ASK_REASON = {
 
 def config_dir() -> Path:
     base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(base) / "unizo-ctem-mcp"
+    return Path(base) / "unizo-mcp"
 
 
 def state_path(session_id: str) -> Path:
@@ -141,7 +141,7 @@ def pre(event: dict[str, Any]) -> dict[str, Any] | None:
         try:
             return check_commit(event)
         except Exception as exc:  # never allow a commit because the guard broke
-            return decision("ask", f"The CTEM commit guard failed ({exc}); confirm this commit yourself.")
+            return decision("ask", f"The Unizo commit guard failed ({exc}); confirm this commit yourself.")
     if tool in WRITES:
         return decision("ask", ASK_REASON.get(tool, f"{tool} changes data in Unizo, recorded as you."))
     return None
@@ -215,7 +215,7 @@ def main() -> int:
         elif mode == "post":
             post(event)
     except Exception as exc:  # a broken hook must not break the session
-        print(f"unizo_ctem_guard: {exc}", file=sys.stderr)
+        print(f"unizo_guard: {exc}", file=sys.stderr)
     return 0
 
 
