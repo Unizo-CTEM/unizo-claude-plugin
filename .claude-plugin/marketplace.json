@@ -1,16 +1,16 @@
 {
-  "name": "unizo-ctem",
+  "name": "unizo",
   "owner": {
     "name": "Unizo"
   },
   "metadata": {
-    "description": "Claude Code plugins from Unizo CTEM"
+    "description": "Claude Code plugins from Unizo"
   },
   "plugins": [
     {
-      "name": "ctem",
+      "name": "unizo",
       "source": "./",
-      "description": "Unizo CTEM toolkit for Claude Code",
+      "description": "Unizo toolkit for Claude Code",
       "version": "0.1.0",
       "category": "security"
     }

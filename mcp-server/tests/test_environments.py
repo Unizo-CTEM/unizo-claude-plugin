@@ -1,0 +1,338 @@
+"""Named environments: file parsing, how the active one replaces UNIZO_* variables, and the switch command."""
+
+from __future__ import annotations
+
+import json
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from unizo_mcp import environments as envs
+from unizo_mcp.config import Settings
+
+STAGING = {
+    "description": "Acme staging",
+    "api_url": "https://unizo-staging.acme.com",
+    "sso_issuer": "https://acme.okta.com/oauth2/default",
+    "sso_client_id": "0oa-staging",
+    "remote_mcp": {"url": "https://unizo-staging.acme.com/mcp", "client_id": "mcp-staging", "callback_port": 3118},
+}
+PROD = {
+    "api_url": "https://unizo.acme.com",
+    "sso_issuer": "https://login.example.com",
+    "sso_client_id": "prod-client",
+    "remote_mcp": {"url": "https://unizo.acme.com/mcp", "client_id": "mcp-prod"},
+}
+
+
+def write(path: Path, environments: dict) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"environments": environments}))
+    return path
+
+
+@pytest.fixture
+def env_file(tmp_path: Path) -> Path:
+    return write(tmp_path / "envs" / "acme.json", {"staging": STAGING, "prod": PROD})
+
+
+class FakeClaude:
+    """Stands in for the `claude` CLI and remembers the user-scope MCP servers."""
+
+    def __init__(self, servers: dict | None = None) -> None:
+        self.servers: dict[str, dict] = dict(servers or {})
+        self.calls: list[list[str]] = []
+
+    def __call__(self, args: list[str]) -> subprocess.CompletedProcess[str]:
+        self.calls.append(args)
+        sub, name = args[2], args[-1] if args[2] != "add-json" else args[-2]
+        if sub == "get":
+            if name in self.servers:
+                return subprocess.CompletedProcess(args, 0, f"{name}:\n  Scope: User config\n", "")
+            return subprocess.CompletedProcess(args, 1, "", f"No MCP server found with name: {name}")
+        if sub == "remove":
+            self.servers.pop(name, None)
+        elif sub == "add-json":
+            self.servers[name] = json.loads(args[-1])
+        return subprocess.CompletedProcess(args, 0, "ok", "")
+
+    def subcommands(self) -> list[str]:
+        return [c[2] for c in self.calls]
+
+
+# ── Parsing ──
+
+
+@pytest.mark.parametrize(
+    ("environment", "message"),
+    [
+        ({"api_url": "https://x", "api_token": "s3cret"}, "Secrets don't belong"),
+        ({"api_url": "https://x", "cloud_url": "https://x"}, "unknown key(s) cloud_url"),
+        ({"remote_mcp": {"url": "http://unizo.acme.com/mcp"}}, "must start with https://"),
+        ({"remote_mcp": {"client_id": "x"}}, "url is required"),
+        ({"remote_mcp": {"url": "https://x/mcp", "clientId": "x"}}, "unknown key(s) clientId"),
+        ({"remote_mcp": {"url": "https://x/mcp", "callback_port": "3118"}}, "callback_port must be"),
+        ({"use_plugin_secrets": "yes"}, "use_plugin_secrets must be"),
+        ({"use_env_secrets": "yes"}, "use_env_secrets must be"),
+    ],
+)
+def test_invalid_environments_are_rejected(tmp_path: Path, environment: dict, message: str) -> None:
+    path = write(tmp_path / "e.json", {"bad": environment})
+    with pytest.raises(envs.EnvConfigError, match=message.replace("(", r"\(").replace(")", r"\)")):
+        envs.parse_file(path)
+
+
+def test_remote_server_config_for_claude() -> None:
+    remote = envs.RemoteMcp("https://x/mcp", "cid", 3118, "openid email")
+    assert remote.server_config() == {
+        "type": "http",
+        "url": "https://x/mcp",
+        "oauth": {"clientId": "cid", "callbackPort": 3118, "scopes": "openid email"},
+    }
+    assert envs.RemoteMcp("https://x/mcp").server_config() == {"type": "http", "url": "https://x/mcp"}
+
+
+def test_remote_without_gateway_sso_gets_no_headers_helper(tmp_path: Path, isolated_config: Path) -> None:
+    path = write(tmp_path / "e.json", {"ci": {"api_url": "https://unizo.acme.com", "remote_mcp": {"url": "https://x/mcp"}}})
+    claude = FakeClaude()
+    envs.use("ci", file=path, run=claude, out=lambda _: None)
+    assert "headersHelper" not in claude.servers["unizo-cloud"]
+
+
+# ── The active environment replaces the UNIZO_* variables ──
+
+
+def plugin_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    """UNIZO_* variables a user exported earlier, for some other deployment."""
+    for var, value in {
+        "UNIZO_API_URL": "https://old.example.com",
+        "UNIZO_API_TOKEN": "old-token",
+        "UNIZO_OIDC_ISSUER": "https://old-idp.example.com",
+        "UNIZO_OIDC_CLIENT_ID": "old-client",
+        "UNIZO_OIDC_AUDIENCE": "old-audience",
+        "UNIZO_OIDC_REDIRECT_PORT": "9999",
+    }.items():
+        monkeypatch.setenv(var, value)
+
+
+def test_plugin_options_apply_when_no_environment_is_active(monkeypatch: pytest.MonkeyPatch) -> None:
+    plugin_options(monkeypatch)
+    s = Settings.from_env()
+    assert s.environment == "" and s.api_url == "https://old.example.com" and s.auth_mode == "static-token"
+
+
+def test_active_environment_replaces_every_plugin_option(
+    monkeypatch: pytest.MonkeyPatch, env_file: Path
+) -> None:
+    plugin_options(monkeypatch)
+    envs.use("staging", file=env_file, run=FakeClaude(), out=lambda _: None)
+    s = Settings.from_env()
+    assert s.environment == "staging" and s.environment_source == str(env_file)
+    assert s.api_url == "https://unizo-staging.acme.com"
+    assert s.oidc.issuer == STAGING["sso_issuer"] and s.oidc.client_id == "0oa-staging"
+    # Nothing carries over from the old options: unset keys fall back to defaults, and the token isn't sent.
+    assert s.api_token == "" and s.auth_mode == "sso"
+    assert s.oidc.audience == "" and s.oidc.redirect_port == 8765
+
+
+def test_plugin_secrets_only_when_the_environment_opts_in(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    plugin_options(monkeypatch)
+    env_file = write(tmp_path / "e.json", {"ci": {"api_url": "https://unizo.acme.com", "use_env_secrets": True}})
+    envs.use("ci", file=env_file, run=FakeClaude(), out=lambda _: None)
+    s = Settings.from_env()
+    assert s.api_token == "old-token" and s.auth_mode == "static-token"
+
+
+def test_old_use_plugin_secrets_key_still_works(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    plugin_options(monkeypatch)
+    env_file = write(tmp_path / "e.json", {"ci": {"api_url": "https://unizo.acme.com", "use_plugin_secrets": True}})
+    envs.use("ci", file=env_file, run=FakeClaude(), out=lambda _: None)
+    assert Settings.from_env().api_token == "old-token"
+
+
+def test_missing_active_environment_is_reported_not_fatal(
+    monkeypatch: pytest.MonkeyPatch, env_file: Path
+) -> None:
+    plugin_options(monkeypatch)
+    envs.use("prod", file=env_file, run=FakeClaude(), out=lambda _: None)
+    write(env_file, {"staging": STAGING})  # prod deleted from the file
+    s = Settings.from_env()
+    assert s.environment == "" and s.api_url == "https://old.example.com"
+    assert any('"prod" is no longer' in p for p in s.problems)
+
+
+def test_deleted_environments_file_is_reported_not_fatal(
+    monkeypatch: pytest.MonkeyPatch, env_file: Path
+) -> None:
+    plugin_options(monkeypatch)
+    envs.use("prod", file=env_file, run=FakeClaude(), out=lambda _: None)
+    env_file.unlink()
+    s = Settings.from_env()
+    assert s.environment == "" and any("is missing" in p for p in s.problems)
+
+
+# ── Switching ──
+
+
+def test_use_registers_the_remote_server_with_its_client_id(env_file: Path) -> None:
+    claude = FakeClaude()
+    envs.use("staging", file=env_file, run=claude, out=lambda _: None)
+    assert claude.servers["unizo-cloud"] == {
+        "type": "http",
+        "url": "https://unizo-staging.acme.com/mcp",
+        "headersHelper": f"uv run --quiet --project {envs.MCP_SERVER_DIR} unizo-mcp headers",
+        "oauth": {"clientId": "mcp-staging", "callbackPort": 3118},
+    }
+    assert ["claude", "mcp", "add-json", "--scope", "user", "unizo-cloud"] == claude.calls[-1][:6]
+    assert envs.read_state()["name"] == "staging"
+
+
+def test_switching_signs_out_the_old_remote_and_replaces_it(env_file: Path) -> None:
+    claude = FakeClaude()
+    envs.use("staging", file=env_file, run=claude, out=lambda _: None)
+    claude.calls.clear()
+    envs.use("prod", file=env_file, run=claude, out=lambda _: None)
+    assert claude.subcommands() == ["get", "logout", "remove", "add-json"]
+    assert claude.servers["unizo-cloud"]["oauth"] == {"clientId": "mcp-prod"}
+
+
+def test_reapplying_the_same_environment_keeps_the_remote_sign_in(env_file: Path) -> None:
+    claude = FakeClaude()
+    envs.use("staging", file=env_file, run=claude, out=lambda _: None)
+    claude.calls.clear()
+    envs.use("staging", file=env_file, run=claude, out=lambda _: None)
+    assert "logout" not in claude.subcommands()
+
+
+def test_environment_without_remote_removes_it(isolated_config: Path, env_file: Path) -> None:
+    claude = FakeClaude()
+    envs.use("staging", file=env_file, run=claude, out=lambda _: None)
+    write(env_file, {"staging": STAGING, "local": {"api_url": "http://127.0.0.1:9401"}})
+    envs.use("local", file=env_file, run=claude, out=lambda _: None)
+    assert "unizo-cloud" not in claude.servers
+    assert envs.read_state()["remote_registered"] is False
+
+
+def test_wont_replace_a_server_it_did_not_add(env_file: Path) -> None:
+    claude = FakeClaude({"unizo-cloud": {"type": "http", "url": "https://someone-elses/mcp"}})
+    with pytest.raises(envs.EnvConfigError, match="already exists"):
+        envs.use("staging", file=env_file, run=claude, out=lambda _: None)
+    assert claude.servers["unizo-cloud"]["url"] == "https://someone-elses/mcp"
+    envs.use("staging", file=env_file, force=True, run=claude, out=lambda _: None)
+    assert claude.servers["unizo-cloud"]["url"] == "https://unizo-staging.acme.com/mcp"
+
+
+def test_unknown_environment(env_file: Path) -> None:
+    with pytest.raises(envs.EnvConfigError, match=r"Available: prod, staging in .*acme\.json"):
+        envs.use("qa", file=env_file, run=FakeClaude(), out=lambda _: None)
+    assert envs.read_state() is None
+
+
+def test_add_failure_is_reported_and_state_unchanged(env_file: Path) -> None:
+    def failing(args: list[str]) -> subprocess.CompletedProcess[str]:
+        if args[2] == "add-json":
+            return subprocess.CompletedProcess(args, 1, "", "Invalid configuration")
+        return subprocess.CompletedProcess(args, 1, "", "not found")
+
+    with pytest.raises(envs.EnvConfigError, match="Invalid configuration"):
+        envs.use("staging", file=env_file, run=failing, out=lambda _: None)
+    assert envs.read_state() is None
+
+
+def test_off_restores_plugin_options_and_removes_remote(monkeypatch: pytest.MonkeyPatch, env_file: Path) -> None:
+    plugin_options(monkeypatch)
+    claude = FakeClaude()
+    envs.use("staging", file=env_file, run=claude, out=lambda _: None)
+    envs.off(run=claude, out=lambda _: None)
+    assert "unizo-cloud" not in claude.servers and envs.read_state() is None
+    assert Settings.from_env().api_url == "https://old.example.com"
+
+
+def test_cli_list_marks_active(env_file: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert envs.cli(["list", "--file", str(env_file)]) == 0
+    assert "* " not in capsys.readouterr().out
+    envs.use("prod", file=env_file.resolve(), run=FakeClaude(), out=lambda _: None)
+    envs.cli(["list", "--file", str(env_file)])
+    lines = capsys.readouterr().out.splitlines()
+    assert any(line.startswith("* prod") for line in lines) and any(line.startswith("  staging") for line in lines)
+
+
+def test_cli_usage_and_errors(capsys: pytest.CaptureFixture[str]) -> None:
+    assert envs.cli(["frobnicate"]) == 2
+    assert "usage: unizo-mcp env" in capsys.readouterr().err
+    capsys.readouterr()
+
+
+def test_list_and_use_need_a_file(env_file: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """There is no default environments file, not even when one exists in the config folder."""
+    write(env_file.parent.parent / "config" / "unizo-mcp" / "environments.json", {"staging": STAGING})
+    assert envs.cli(["list"]) == 1
+    assert "list needs --file" in capsys.readouterr().err
+    assert envs.cli(["use", "staging"]) == 1
+    assert "use needs --file" in capsys.readouterr().err
+    assert envs.read_state() is None
+    assert envs.cli(["use", "nope", "--file", str(env_file)]) == 1
+    assert 'No environment named "nope"' in capsys.readouterr().err
+
+
+# ── --file: environments from a file the user names ──
+
+
+def test_use_with_file_reads_only_that_file(tmp_path: Path, env_file: Path) -> None:
+    custom = write(tmp_path / "elsewhere" / "acme.json", {"qa": PROD})
+    fake = FakeClaude()
+    env = envs.use("qa", file=custom, run=fake, out=lambda _: None)
+    assert env.source == custom
+    assert fake.servers["unizo-cloud"]["url"] == PROD["remote_mcp"]["url"]
+    assert envs.active_environment().name == "qa"
+    with pytest.raises(envs.EnvConfigError, match=r'No environment named "staging".*acme\.json'):
+        envs.use("staging", file=custom, run=fake, out=lambda _: None)
+
+
+def test_cli_list_and_use_with_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    custom = write(tmp_path / "acme.json", {"qa": STAGING, "uat": PROD})
+    monkeypatch.chdir(tmp_path)
+    fake = FakeClaude()
+    monkeypatch.setattr(envs.use, "__kwdefaults__", {**envs.use.__kwdefaults__, "run": fake})
+
+    assert envs.cli(["list", "--file", "acme.json"]) == 0
+    listed = capsys.readouterr().out
+    assert "qa" in listed and "uat" in listed and "*" not in listed
+
+    assert envs.cli(["use", "uat", "--file=acme.json"]) == 0
+    assert envs.read_state()["source"] == str(custom.resolve())
+    assert envs.cli(["list", "-f", str(custom)]) == 0
+    assert "* uat" in capsys.readouterr().out
+
+
+def test_cli_file_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert envs.cli(["list", "--file", str(tmp_path / "missing.json")]) == 1
+    assert "Environments file not found" in capsys.readouterr().err
+    assert envs.cli(["list", "--file"]) == 1
+    assert "needs a path" in capsys.readouterr().err
+
+
+# ── Setup completion ──
+
+
+def test_setup_done_is_recorded_and_reset_by_the_next_switch(env_file: Path) -> None:
+    claude = FakeClaude()
+    envs.use("staging", file=env_file, run=claude, out=lambda _: None)
+    assert not envs.read_state().get("setup_complete")
+    assert envs.cli(["setup-done"]) == 0
+    state = envs.read_state()
+    assert state["setup_complete"] is True and state["name"] == "staging" and state["remote_registered"] is True
+    envs.use("prod", file=env_file, run=claude, out=lambda _: None)
+    assert not envs.read_state().get("setup_complete")
+
+
+def test_setup_done_needs_an_active_environment(capsys: pytest.CaptureFixture[str]) -> None:
+    assert envs.cli(["setup-done"]) == 1
+    assert "No Unizo environment is active" in capsys.readouterr().err

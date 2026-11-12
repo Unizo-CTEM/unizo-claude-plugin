@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "unizo": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--quiet",
+        "--project",
+        "${CLAUDE_PLUGIN_ROOT}/mcp-server",
+        "unizo-mcp"
+      ],
+      "env": {
+        "UNIZO_CONFIGURE_HINT": "Run /unizo:unizo-plugin-configure to pick an environment",
+        "UNIZO_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}"
+      }
+    }
+  }
+}
