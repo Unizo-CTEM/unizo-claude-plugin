@@ -9,12 +9,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-HOOK = Path(__file__).resolve().parents[2] / "hooks" / "unizo_onboard.py"
+HOOK = Path(__file__).resolve().parents[1] / "hooks" / "unizo_onboard.py"
 
 
 def run(extra_env: dict[str, str] | None = None) -> dict[str, Any] | None:
     env = os.environ.copy()
-    env.pop("UNIZO_API_URL", None)
     env.update(extra_env or {})
     proc = subprocess.run(
         [sys.executable, str(HOOK)],
@@ -38,10 +37,6 @@ def test_fresh_install_points_claude_to_setup_without_a_banner() -> None:
     assert "environments.json" in out["hookSpecificOutput"]["additionalContext"]
 
 
-def test_env_var_gateway_without_environment_is_silent() -> None:
-    assert run({"UNIZO_API_URL": "https://unizo.acme.com"}) is None
-
-
 def test_environment_picked_but_setup_unfinished_finishes_it(isolated_config: Path) -> None:
     write_state(isolated_config, {"name": "staging"})
     out = run()
@@ -50,7 +45,20 @@ def test_environment_picked_but_setup_unfinished_finishes_it(isolated_config: Pa
     context = out["hookSpecificOutput"]["additionalContext"]
     assert "unizo:unizo-plugin-configure" in context
     assert "without asking" in context
-    assert "One SSO sign-in covers both" in context
+    assert "OAuth" in context and "unizo_login" not in context
+
+
+def test_registration_from_an_older_version_asks_to_switch_again(isolated_config: Path) -> None:
+    write_state(isolated_config, {
+        "name": "dev52",
+        "source": "/home/me/envs.json",
+        "remote": {"type": "http", "url": "https://dev52/mcp", "headersHelper": "old-unizo-helper headers"},
+        "setup_complete": True,
+    })
+    out = run()
+    assert out is not None
+    assert '"dev52"' in out["systemMessage"] and "older plugin version" in out["systemMessage"]
+    assert "/unizo:unizo-plugin-configure /home/me/envs.json dev52" in out["hookSpecificOutput"]["additionalContext"]
 
 
 def test_setup_complete_is_silent(isolated_config: Path) -> None:

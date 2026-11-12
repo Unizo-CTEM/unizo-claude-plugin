@@ -1,7 +1,8 @@
 # unizo-claude-plugin
 
-A Claude Code plugin for Unizo: work your exposure review queue, sign in to your Unizo deployment with SSO, and
-switch between deployments, all from Claude Code.
+A Claude Code plugin for Unizo: work your exposure review queue, connect to your Unizo deployment's MCP server, and
+switch between deployments, all from Claude Code. It needs only `python3` and the `claude` CLI: there is no local MCP
+server and nothing to install with `uv`, `pip` or `npm`.
 
 **Full guide:** [docs/SETUP_AND_TESTING.md](docs/SETUP_AND_TESTING.md) covers installing, configuring for your
 GCP/AWS deployment and identity provider, administrator setup, manual and Claude-driven testing, and troubleshooting.
@@ -13,14 +14,14 @@ and switching between environments.
 
 | Type | Name | Purpose |
 |---|---|---|
-| Command | `/unizo:unizo-plugin-configure <environments.json> [<name>]` | Guided setup: pick or switch an environment from the environments file you pass, then one SSO sign-in for both the gateway and the `unizo-cloud` MCP server |
+| Command | `/unizo:unizo-plugin-configure <environments.json> [<name>]` | Guided setup: pick or switch an environment from the environments file you pass, register the `unizo-cloud` MCP server for it, and sign in. `off` removes it |
 | Command | `/unizo:unizo-queue` | Work your review queue (W1): Investigations awaiting review, mine or unclaimed, `crown`, `kev` |
 | Skill | `unizo-review-queue` | W1 end to end: queue → read → take → weigh plans → re-draft (if none fits) → choose → `preview_commit` → `commit_actions`, confirming every write |
 | Hook | `unizo_guard` | On `unizo-cloud` tools: blocks `move_ticket` / `set_jira_assignee`, refuses `commit_actions` without a recent matching `preview_commit`, asks before every write, audits writes to `~/.config/unizo-mcp/audit.jsonl` |
 | Hook | `unizo_onboard` | At session start: offers `/unizo:unizo-plugin-configure` until an environment is picked, then finishes setup on your first message after the restart |
 | Agent | `exposure-triage` | Triages a finding and recommends a priority and next step |
-| MCP server | `unizo` | Local server (stdio) for sign-in and environments. Tools: `unizo_status`, `unizo_login`, `unizo_logout` |
-| MCP server | `unizo-cloud` | Remote Unizo MCP server, registered by the active environment (`/unizo:unizo-plugin-configure <environments.json> demo` for `https://demo.unizo.ai/mcp`) |
+| Script | `scripts/unizo_env.py` | Standard-library Python the configure command runs: lists environments, registers `unizo-cloud` with `claude mcp add-json`, records the active environment |
+| MCP server | `unizo-cloud` | The remote Unizo MCP server, where every Unizo tool lives. Registered at user scope for the active environment and signed in with Claude Code's own OAuth. The plugin ships no MCP server of its own |
 
 ## What you can do
 
@@ -66,9 +67,9 @@ Medium or Low) with a next step: validate, fix, accept or monitor.
 
 ### Sign in and switch deployments
 
-One SSO sign-in (any OIDC provider) covers both the Unizo gateway and the remote `unizo-cloud` MCP server. Tokens
-refresh automatically. An environments file lets you switch between deployments (demo, staging, prod, a
-customer's tenant) with one command. See [Connect to your Unizo deployment](#connect-to-your-unizo-deployment).
+You sign in to the remote `unizo-cloud` MCP server once, with Claude Code's own OAuth, through whatever identity
+provider your Unizo deployment uses. Claude Code stores and refreshes the tokens. An environments file lets you switch
+between deployments (demo, staging, prod, a customer's tenant) with one command. See [Connect to your Unizo deployment](#connect-to-your-unizo-deployment).
 
 ### Known limitations
 
@@ -91,8 +92,8 @@ This repo is both a plugin and a single-plugin marketplace.
 /plugin install unizo@unizo
 ```
 
-**Prerequisite:** [`uv`](https://docs.astral.sh/uv/) must be on your `PATH` (`pipx install uv` or
-`curl -LsSf https://astral.sh/uv/install.sh | sh`). The local MCP server runs with it.
+**Prerequisites:** `python3` (3.8 or later; the hooks and the environment script use only the standard library)
+and the `claude` CLI on your `PATH`.
 
 ## Connect to your Unizo deployment
 
@@ -105,78 +106,43 @@ environments file your administrator gave you (Claude also offers it in its firs
 The plugin ships no environments file and reads none by default; without a path, the command asks you for one. It
 will:
 
-1. let you pick an environment from that file;
-2. sign you in once through SSO. The same sign-in covers the Unizo gateway and the remote `unizo-cloud` MCP
-   server (the remote server gets the gateway's token through its `headersHelper`), so there's no second sign-in;
-3. ask you to restart Claude Code so the environment loads (`claude` or `claude --continue`). Your first message after
-   the restart finishes setup by checking that both servers are connected. You don't need to run the command again.
+1. let you pick an environment from that file, and register its remote MCP server as `unizo-cloud` in your Claude
+   Code user config;
+2. ask you to restart Claude Code so the server loads (`claude` or `claude --continue`);
+3. on your first message after the restart, sign you in to `unizo-cloud` through your company's sign-in page
+   (Claude Code's own OAuth, the same as `/mcp` → `unizo-cloud` → **Authenticate**) and check the connection with
+   `get_my_context`. You don't need to run the command again.
 
 This continues at every startup until setup finishes. It comes back when you switch to another environment.
 (Claude Code has no install-time hook, so the flow starts at the first session after install, not inside
-`/plugin install` itself.)
+`/plugin install` itself.) The plugin asks for nothing during `/plugin install`.
 
-The plugin asks for nothing during `/plugin install`: all settings come from the environment you pick.
+### Signing in and out
 
-### Environment variables instead of an environment
-
-Without an environments file, export the settings before starting Claude Code; the `unizo` server inherits them.
-Then run `/unizo:unizo-plugin-configure` to check the connection and sign in.
-
-```
-export UNIZO_API_URL=https://unizo.acme.com
-export UNIZO_OIDC_ISSUER=https://acme.okta.com/oauth2/default
-export UNIZO_OIDC_CLIENT_ID=0oa...
-claude
-```
-
-| Variable | Environment key | Required | Meaning |
-|---|---|---|---|
-| `UNIZO_API_URL` | `api_url` | yes | Base URL of your Unizo gateway, e.g. `https://unizo.acme.com` |
-| `UNIZO_API_TOKEN` | (secret) | no | Static bearer token (service accounts, CI). If set, it takes precedence over SSO |
-| `UNIZO_OIDC_ISSUER` | `sso_issuer` | for SSO | OIDC issuer URL; `<issuer>/.well-known/openid-configuration` must exist |
-| `UNIZO_OIDC_CLIENT_ID` | `sso_client_id` | for SSO | Client ID of the native/public app registered for this plugin |
-| `UNIZO_OIDC_CLIENT_SECRET` | (secret) | no | Only if your IdP requires a secret for native apps |
-| `UNIZO_OIDC_SCOPES` | `sso_scopes` | no | Default `openid profile email offline_access` |
-| `UNIZO_OIDC_AUDIENCE` | `sso_audience` | no | Sent as `audience` (Auth0, some Okta authorization servers) |
-| `UNIZO_OIDC_TOKEN_TYPE` | `sso_token_type` | no | `access` (default) or `id`: the token your gateway expects |
-| `UNIZO_OIDC_REDIRECT_PORT` | `sso_redirect_port` | no | Local callback port, default `8765` |
-| `UNIZO_API_TIMEOUT` | | no | Gateway request timeout in seconds, default `20` |
-| `UNIZO_TOKEN_CACHE` | | no | Token cache path, default `~/.config/unizo-mcp/tokens.json` |
-
-### Signing in with SSO
-
-The plugin works with any OIDC provider: Okta, Microsoft Entra ID, Auth0, Google Workspace, AWS Cognito and others.
-Ask Claude to "sign in to Unizo", or run `/unizo:unizo-plugin-configure`. Your browser opens at your company's sign-in page.
-Tokens are cached in `~/.config/unizo-mcp/tokens.json` (readable only by you) and refresh automatically, so you sign
-in again only when your IdP ends the session. Tokens are kept per issuer and client ID, so people who work with more
-than one deployment don't get their sessions mixed up.
-
-To sign out, ask Claude to "sign out of Unizo" (the `unizo_logout` tool).
+Sign-in is handled by Claude Code: `unizo-cloud` is a standard remote MCP server with OAuth, so it works with whatever
+identity provider your Unizo deployment uses. Claude Code stores and refreshes the tokens. To sign out, open
+`/mcp` → `unizo-cloud` → **Clear authentication**, or run `claude mcp logout unizo-cloud`.
 
 ### Environments: switch between deployments
 
 To move between deployments (demo, staging, prod, a customer's tenant), list them in an environments file and
-switch with one command. Each environment sets the gateway and SSO values for the local `unizo` server, plus the
-**remote MCP server URL and OAuth client ID** for `unizo-cloud`.
+switch with one command. Each environment names the **remote MCP server URL** and, optionally, a pre-registered
+**OAuth client ID** for `unizo-cloud`.
 
 ```
 /unizo:unizo-plugin-configure ~/acme-envs.json           # pick from the file, then restart Claude Code
 /unizo:unizo-plugin-configure ~/acme-envs.json staging   # switch straight to staging, then restart Claude Code
-uv run --project <plugin-dir>/mcp-server unizo-mcp env off   # back to UNIZO_* environment variables
+/unizo:unizo-plugin-configure off                        # remove unizo-cloud, then restart Claude Code
 ```
 
 The plugin ships no environments file and never reads one by default: you always pass the path. Keep the file
-wherever suits you (for example in a repository your team shares). The active environment remembers which file it
-came from and keeps reading it, so don't delete or move it while it's in use. The format:
+wherever suits you (for example in a repository your team shares). The format:
 
 ```json
 {
   "environments": {
     "staging": {
       "description": "Acme staging (GCP)",
-      "api_url": "https://unizo-staging.acme.com",
-      "sso_issuer": "https://acme.okta.com/oauth2/default",
-      "sso_client_id": "0oa-staging-client",
       "remote_mcp": {
         "url": "https://unizo-staging.acme.com/mcp",
         "client_id": "unizo-mcp-staging",
@@ -189,41 +155,36 @@ came from and keeps reading it, so don't delete or move it while it's in use. Th
 
 | Key | Meaning |
 |---|---|
-| `api_url`, `sso_issuer`, `sso_client_id`, `sso_scopes`, `sso_audience`, `sso_token_type`, `sso_redirect_port` | Same as the variables above |
-| `remote_mcp.url` | Remote MCP endpoint (`https://`; `http://` only for localhost) |
+| `remote_mcp.url` | Remote MCP endpoint (`https://`; `http://` only for localhost). Required |
 | `remote_mcp.client_id` | Pre-registered OAuth client ID. Leave it out to use dynamic client registration |
-| `remote_mcp.callback_port`, `remote_mcp.scopes` | Optional OAuth callback port and scopes for the remote server |
-| `use_env_secrets` | `true` to use `UNIZO_API_TOKEN` / `UNIZO_OIDC_CLIENT_SECRET` from your shell with this environment (`use_plugin_secrets` still works) |
+| `remote_mcp.callback_port`, `remote_mcp.scopes` | Optional OAuth callback port and scopes |
 | `description` | Shown in the list |
 
+Older files may also carry `api_url`, `sso_*` and `use_env_secrets` keys for the local server earlier versions
+shipped; they are accepted and ignored. Secrets (`api_token`, `sso_client_secret`) are refused: they never belong in
+the file.
+
 How it works:
-- While an environment is active, its values **replace** every `UNIZO_*` variable: keys it leaves out fall back to the
-  defaults, not to whatever was configured before. Nothing leaks from one deployment into the next.
-- Secrets aren't allowed in the file. An environment uses the token or client secret from the environment variables
-  only if it sets `"use_env_secrets": true`, so a token for one deployment is never sent to another.
-- `use` registers `unizo-cloud` at user scope with `claude mcp add-json`. That's needed because Claude Code doesn't
-  substitute environment variables into a remote server's `oauth.clientId`. When the URL or client
-  ID changes, the old sign-in is cleared, because Claude Code would otherwise reuse the cached OAuth client. Sign in
-  again from `/mcp` → `unizo-cloud` → **Authenticate**.
+- Switching registers `unizo-cloud` at user scope with `claude mcp add-json`. That's needed because Claude Code doesn't
+  substitute environment variables into a remote server's `oauth.clientId`, so a plugin `.mcp.json` can't do it.
+- When the URL or client ID changes, the old sign-in is cleared, because Claude Code would otherwise reuse the cached
+  OAuth client. Sign in again when asked.
+- The configure command won't replace a `unizo-cloud` server it didn't add without asking you first.
 - The active environment is kept in `~/.config/unizo-mcp/active-environment.json`. Restart Claude Code after switching.
 
-From a terminal: `uv run --project <plugin-dir>/mcp-server unizo-mcp env [list --file <path> | current | use <name> --file <path> [--force] | off]`.
+From a terminal: `python3 <plugin-dir>/scripts/unizo_env.py [list --file <path> | current | use <name> --file <path> [--force] | off]`.
+
+### Upgrading from a version with the local `unizo` server
+
+Earlier versions shipped a local `unizo` MCP server (run with `uv`) that signed in to the Unizo gateway and passed that
+token to `unizo-cloud`. It's gone. If you set up an environment with an earlier version, Claude tells you at the next
+session start; run `/unizo:unizo-plugin-configure <environments.json> <name>` again, restart, and sign in to
+`unizo-cloud` once through `/mcp`. The old gateway token cache (`~/.config/unizo-mcp/tokens.json`) is no longer used
+and can be deleted.
 
 ## For administrators: deployment requirements
 
-**Gateway (`api_url`)**
-- Reachable over HTTPS from users' machines (VPN, allow-listing, etc.).
-- Accepts `Authorization: Bearer <token>`, validating SSO tokens against your IdP (issuer, audience, signature).
-- Returns `401` for missing, expired or invalid tokens. The plugin then refreshes the token once and retries.
-- Serves `GET /health`, which `/unizo:unizo-plugin-configure` uses for the connectivity check.
-
-**Identity provider:** register one *native/public* application for the plugin:
-- Grant type: authorization code with PKCE. Allow refresh tokens so users stay signed in.
-- Redirect URI: `http://localhost:8765/callback`, or the port you distribute as `sso_redirect_port`.
-- If the gateway validates access tokens, make sure the IdP issues JWT access tokens for the gateway's audience
-  (set `sso_audience` if your IdP needs it). Otherwise set `sso_token_type` to `id`.
-
-**Remote MCP server (optional, `remote_mcp.url` in an environment):** it must implement
+**Remote MCP server (`remote_mcp.url` in an environment):** it must implement
 [MCP authorization](https://modelcontextprotocol.io/specification/latest/basic/authorization). It answers `401`
 with `WWW-Authenticate` pointing at its OAuth protected-resource metadata, and its authorization server supports
 **dynamic client registration**, or you pre-register a public client and send users its ID as
@@ -231,43 +192,17 @@ with `WWW-Authenticate` pointing at its OAuth protected-resource metadata, and i
 `remote_mcp.callback_port`; otherwise Claude Code picks one. The token's audience must match what the server checks.
 Keycloak ignores the `resource` parameter Claude Code sends, so add an audience mapper for the MCP URL.
 
+The server must be reachable over HTTPS from users' machines (VPN, allow-listing, etc.).
+
 ## Development
 
 ```
-claude --plugin-dir .                      # load the plugin from this checkout
-cd mcp-server && uv run --extra dev pytest # MCP server tests
+claude --plugin-dir .          # load the plugin from this checkout
+python3 -m pytest tests        # hook and environment-script tests (needs pytest)
 ```
-
-### Testing against a fake deployment
-
-`mcp-server/tests/e2e/fake_stack.py` runs a fake OIDC identity provider and Unizo gateway on localhost. The IdP
-signs in `analyst@example.com` instantly but still enforces the client ID, redirect URI and PKCE like a real one.
-
-```
-python3 mcp-server/tests/e2e/fake_stack.py --access-ttl 70     # 70s tokens: refresh kicks in after ~10s
-```
-
-Point the installed plugin at it with a `local` environment (`api_url` = `http://127.0.0.1:9401`,
-`sso_issuer` = `http://127.0.0.1:9400`, `sso_client_id` = `unizo-plugin-test`), or start Claude Code with the matching
-`UNIZO_*` variables.
-Then run `/unizo:unizo-plugin-configure`. Other things to try:
-
-- Revoke every session: `curl -X POST 127.0.0.1:9400/admin/revoke-all`, then ask Claude to check the connection.
-- See what the gateway received: `curl 127.0.0.1:9401/admin/stats`.
-- Test the "no browser" path: start Claude Code with `BROWSER="/usr/bin/true %s"` and the sign-in URL is shown
-  instead of opened. (`/usr/bin/false` doesn't work: Python then falls back to the default browser.)
 
 To test the install flow, install from a local marketplace:
 `claude plugin marketplace add /path/to/unizo-claude-plugin`, then `claude plugin install unizo@unizo`.
-
-Outside the plugin, the MCP server reads the same `UNIZO_*` environment variables (see
-`mcp-server/src/unizo_mcp/config.py`). `uv run --project mcp-server unizo-mcp login | logout | whoami` signs in
-from a terminal and uses the same token cache. `unizo-mcp headers` prints the `Authorization` header that
-`unizo-cloud` uses (its `headersHelper`).
-
-The root `.mcp.json` uses `${CLAUDE_PLUGIN_ROOT}`, which only resolves when Claude Code loads it as a plugin.
-When you open this repo directly, disable its project-scoped copies (`disabledMcpjsonServers` in
-`.claude/settings.local.json`).
 
 ## Layout
 
@@ -275,12 +210,12 @@ When you open this repo directly, disable its project-scoped copies (`disabledMc
 .claude-plugin/
   plugin.json        # plugin manifest
   marketplace.json   # marketplace catalog (lists this plugin)
-.mcp.json            # local `unizo` MCP server
 commands/            # slash commands
 skills/              # skills (one folder per skill, with SKILL.md)
 agents/              # subagents
 hooks/               # onboarding and guard hooks (hooks.json + Python scripts)
-mcp-server/          # local MCP server (Python, run with uv): src/unizo_mcp, tests
+scripts/             # unizo_env.py: environments and the unizo-cloud registration
+tests/               # pytest tests for the hooks and scripts
 docs/                # setup, developer and planning guides
 ```
 

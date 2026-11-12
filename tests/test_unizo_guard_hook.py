@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-GUARD = Path(__file__).resolve().parents[2] / "hooks" / "unizo_guard.py"
+GUARD = Path(__file__).resolve().parents[1] / "hooks" / "unizo_guard.py"
 SESSION = "sess-1"
 
 

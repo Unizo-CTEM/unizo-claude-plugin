@@ -12,14 +12,14 @@
 
 | Part | State |
 |---|---|
-| Local `unizo` MCP server (`mcp-server/`) | Connection, SSO and environments only: `unizo_status`, `unizo_login`, `unizo_logout`. Signed in to dev52 as dev1_user. |
+| Local `unizo` MCP server | Removed. Environments are handled by `scripts/unizo_env.py` (standard-library Python), and `unizo-cloud` signs in with Claude Code's own OAuth. |
 | Remote `unizo-cloud` MCP server | 99 tools. All Unizo work goes through it. A test call works (W1 queue: 7,906 Investigations awaiting review). |
 | Commands | `/unizo:unizo-setup`, `/unizo:unizo-env`, `/unizo:unizo-hello` |
 | Skills | `unizo-basics` (general Unizo concepts) |
 | Agents | `exposure-triage` (generic reasoning; calls no tools) |
 | Hooks | None |
 
-**Rule:** `unizo-cloud` is the source of truth for Unizo data and actions. The local `unizo` server stays as the auth and environment helper and does not duplicate `unizo-cloud` tools.
+**Rule:** `unizo-cloud` is the source of truth for Unizo data and actions. The plugin ships no MCP server of its own; it registers `unizo-cloud` per environment and adds commands, skills, hooks and an agent around it.
 
 ---
 
@@ -124,7 +124,7 @@ Every skill must:
 | 2 | PreToolUse | All write tools: `commit_actions`, `launch_playbook`, `start_investigation`, `assign_investigation`, `abandon_investigation`, `create_manual_plan`, `reengage_investigation`, `reject_plan`, `select_plan`, `accept_.*`, `withdraw_risk_acceptance`, `add_.*_comment`, `edit_ticket_draft`, `link_existing_ticket`, `report_wrong_destination`, `verify_.*_now`, `generate_report`, `decide_declined_member` | `ask`, so a person confirms every write |
 | 3 | PreToolUse + PostToolUse | `commit_actions` / `preview_commit` | PostToolUse records each `preview_commit` (investigation and plan) in a session file. PreToolUse refuses `commit_actions` unless a preview for the same plan is on record |
 | 4 | PostToolUse | Write tools (as in hook 2) | Append tool, inputs, outcome and time to `~/.config/unizo-mcp/audit.jsonl` |
-| 5 | SessionStart | — | Run `unizo-mcp env current` and remind Claude to call `get_my_context` first |
+| 5 | SessionStart | — | Read the active environment and walk the user through `/unizo:unizo-plugin-configure` until setup is done |
 | 6 | Stop (optional) | — | Scan Claude's last answer for forbidden terms and ask for a rewrite if one appears |
 
 Example for hook 1:
@@ -151,7 +151,6 @@ Example for hook 1:
 
 - Allowlist the read tools so they don't prompt: `mcp__unizo-cloud__find_*`, `mcp__unizo-cloud__get_*`, `mcp__unizo-cloud__list_*`, `mcp__unizo-cloud__preview_*`, `mcp__unizo-cloud__search_all`, `mcp__unizo-cloud__ping`.
 - Write tools are confirmed by hook 2.
-- `.claude/settings.local.json` turns off the repo's own `unizo` and `unizo-cloud` entries in `.mcp.json`. That's expected, because in this setup the servers come from the installed plugin.
 
 ---
 
