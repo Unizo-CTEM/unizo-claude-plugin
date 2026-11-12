@@ -4,8 +4,7 @@
 An environments file lists, per environment, the remote Unizo MCP server (URL and, optionally, a pre-registered OAuth
 client ID). ``use <name>`` registers that server at user scope as ``unizo-cloud`` with ``claude mcp add-json``
 (Claude Code doesn't substitute environment variables into ``oauth.clientId``, so a plugin ``.mcp.json`` can't do
-this). ``login`` then signs in with Claude Code's own OAuth through ``claude mcp login unizo-cloud``, which opens the
-browser and stores the tokens, so the server connects already signed in after the restart that loads it.
+this). The user then signs in with Claude Code's own OAuth: ``/mcp`` -> ``unizo-cloud`` -> Authenticate.
 
 There is no default environments file: the user always names one with ``--file <path>``. The active environment is
 recorded in ``<config>/unizo-mcp/active-environment.json`` together with the file it came from.
@@ -15,7 +14,6 @@ Standard library only, Python 3.8+, so it runs with any ``python3`` and needs no
     python3 unizo_env.py list --file <path>
     python3 unizo_env.py current
     python3 unizo_env.py use <name> --file <path> [--force]
-    python3 unizo_env.py login [--timeout <seconds>]
     python3 unizo_env.py off
 """
 
@@ -250,44 +248,8 @@ def use(name: str, *, file: Path, force: bool = False, run: Runner = _run, out: 
     out(f'Active Unizo environment: {env.name}{f" ({env.description})" if env.description else ""}')
     out(f"  remote MCP: {env.url}")
     out(f"  client ID:  {env.client_id or '(dynamic client registration)'}")
-    out("Next: sign in with `login`, then restart Claude Code to load unizo-cloud.")
+    out("Restart Claude Code to apply, then sign in: /mcp -> unizo-cloud -> Authenticate.")
     return env
-
-
-LOGIN_TIMEOUT = 300
-
-
-def _run_login(args: List[str], timeout: int) -> int:
-    """Runs ``claude mcp login`` with its output shown as it happens (it prints the sign-in URL)."""
-    try:
-        return subprocess.run(args, check=False, stdin=subprocess.DEVNULL, timeout=timeout).returncode
-    except subprocess.TimeoutExpired:
-        return -1
-
-
-def login(
-    *,
-    timeout: int = LOGIN_TIMEOUT,
-    run: Runner = _run,
-    run_login: Callable[[List[str], int], int] = _run_login,
-    out: Callable[[str], None] = print,
-) -> bool:
-    """Signs in to ``unizo-cloud`` with Claude Code's OAuth: opens the browser and waits for the localhost callback."""
-    if read_state() is None:
-        raise EnvConfigError("No Unizo environment is active. Run `use <name> --file <path>` first.")
-    if not _remote_registered(run):
-        raise EnvConfigError(f"No user-scope {REMOTE_SERVER_NAME} server is registered. Run `use` for the environment again.")
-    out("Opening your sign-in page in the browser. Sign in there; this waits until you finish.")
-    code = run_login(["claude", "mcp", "login", REMOTE_SERVER_NAME], timeout)
-    if code == 0:
-        out(f"Signed in to {REMOTE_SERVER_NAME}.")
-        return True
-    if code == -1:
-        out(f"Sign-in didn't finish within {timeout} seconds.")
-    else:
-        out(f"Sign-in failed (exit code {code}).")
-    out(f"You can sign in after the restart instead: /mcp -> {REMOTE_SERVER_NAME} -> Authenticate.")
-    return False
 
 
 def off(*, run: Runner = _run, out: Callable[[str], None] = print) -> None:
@@ -305,13 +267,12 @@ def off(*, run: Runner = _run, out: Callable[[str], None] = print) -> None:
 
 # ── CLI ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
-USAGE = """usage: unizo_env.py [list --file <path> | current | use <name> --file <path> [--force] | login | off]
+USAGE = """usage: unizo_env.py [list --file <path> | current | use <name> --file <path> [--force] | off]
 
   list           environments in the file (* marks the active one)
   --file <path>  the environments file to read (required for list and use; there is no default file)
   current        the active environment and the unizo-cloud registration it made
   use <name>     make <name> active and register its remote MCP server as unizo-cloud
-  login          sign in to unizo-cloud in the browser (claude mcp login); --timeout <seconds>, default 300
   off            remove the unizo-cloud server this command added and forget the active environment"""
 
 
@@ -373,15 +334,6 @@ def cli(args: List[str]) -> int:
             assert file is not None
             use(args[1], file=file, force="--force" in args[2:])
             return 0
-        if command == "login":
-            timeout = LOGIN_TIMEOUT
-            if "--timeout" in args:
-                i = args.index("--timeout")
-                try:
-                    timeout = int(args[i + 1])
-                except (IndexError, ValueError):
-                    raise EnvConfigError("--timeout needs a number of seconds.") from None
-            return 0 if login(timeout=timeout) else 1
         if command == "off":
             off()
             return 0

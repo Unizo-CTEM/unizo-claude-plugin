@@ -4,11 +4,11 @@ argument-hint: "<path-to-environments.json> [<environment name>] | off"
 ---
 
 Connect this plugin to the user's Unizo deployment (GCP or AWS) in one guided flow:
-**environment → sign in → restart → check**. The plugin's Unizo tools all come from the remote `unizo-cloud` MCP
-server; this command registers it for the environment the user picks and signs in to it right away with Claude Code's
-own OAuth (`claude mcp login`, which opens the browser and stores the tokens). Registering a server needs a Claude
-Code restart before it loads, so after the restart `unizo-cloud` connects already signed in; running this command
-again (no arguments) just checks the connection. Say where you are as you go ("Step 1 of 2: environment").
+**environment → restart → sign in → check**. The plugin's Unizo tools all come from the remote `unizo-cloud` MCP
+server; this command registers it for the environment the user picks, and the user signs in to it with Claude Code's
+own OAuth. Registering a server needs a Claude Code restart before it loads, so setup spans two sessions: the user
+runs this command once to pick the environment, restarts, and runs it again (no arguments) to sign in. Say where you
+are as you go ("Step 1 of 2: environment").
 
 Arguments: `$ARGUMENTS`: the path to the user's environments file, optionally followed by the name of the environment
 to switch to; or `off`. There is no default environments file: never fall back to one, always use the file the user
@@ -62,24 +62,7 @@ Never ask the user to paste tokens or secrets into the chat.
      optional. Never put tokens or client secrets in an environments file.
    - `unizo-cloud` already exists and this command didn't add it: ask the user before re-running with `--force`.
    - Anything else: stop.
-4. Sign in now, so the user doesn't have to after the restart. Skip this sub-step in a remote or SSH session, or
-   when no desktop browser is available (for example `xdg-open` is missing or `$DISPLAY` is unset on Linux): go to
-   sub-step 5 with "not signed in".
-   - Tell the user in one line: "A browser tab will open at your sign-in page. Sign in there and come back; I'll
-     wait (up to 5 minutes)."
-   - Run `env login` with a Bash timeout of 330000 ms. It runs `claude mcp login unizo-cloud`, which opens the
-     browser, receives the callback on `http://localhost:<port>/callback` and stores the tokens. If its output
-     includes the sign-in URL, show it too in case the browser didn't open.
-   - Exit code 0: signed in. Anything else (failure or timeout): show the output verbatim; the user signs in after
-     the restart instead (step 2). If the output mentions "Invalid redirect_uri" or "redirect_uri mismatch", explain
-     it as in step 2.
-5. Tell the user, and stop here. Signed in:
-
-   > Environment **<name>** is set and you're signed in. Restart Claude Code to load it: quit, then run `claude`
-   > again (or `claude --continue` to keep this conversation). `unizo-cloud` connects on its own; run
-   > `/unizo:unizo-plugin-configure` once more if you want to check the connection.
-
-   Not signed in:
+4. Tell the user, and stop here:
 
    > Environment **<name>** is set. Restart Claude Code to load it: quit, then run `claude` again (or
    > `claude --continue` to keep this conversation). Then run `/unizo:unizo-plugin-configure` once more to sign in
@@ -87,8 +70,7 @@ Never ask the user to paste tokens or secrets into the chat.
 
 ## 2. Sign in and check (after the restart)
 
-Say one short line first ("Step 2 of 2: checking the unizo-cloud connection"). Usually step 1 already signed in
-and the Unizo tools are there; the sign-in below is the fallback.
+Say one short line first ("Step 2 of 2: signing in to unizo-cloud").
 
 If the environment `env current` reports isn't the one just picked (the user hasn't restarted yet), ask them to
 restart Claude Code and stop. Then look at the tools you have from `unizo-cloud`:
