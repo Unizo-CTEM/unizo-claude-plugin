@@ -4,9 +4,6 @@ A Claude Code plugin for Unizo: work your exposure review queue, connect to your
 switch between deployments, all from Claude Code. It needs only `python3` and the `claude` CLI: there is no local MCP
 server and nothing to install with `uv`, `pip` or `npm`.
 
-> **Renamed:** this plugin was formerly `unizo-ctem` (repo `ctem-claude-plugin`). See
-> [Upgrading from unizo-ctem](#upgrading-from-unizo-ctem) if you had the old version installed.
-
 **Full guide:** [docs/SETUP_AND_TESTING.md](docs/SETUP_AND_TESTING.md) covers installing, configuring for your
 GCP/AWS deployment and identity provider, administrator setup, manual and Claude-driven testing, and troubleshooting.
 
@@ -19,12 +16,72 @@ and switching between environments.
 |---|---|---|
 | Command | `/unizo:unizo-plugin-configure <environments.json> [<name>]` | Guided setup: pick or switch an environment from the environments file you pass, register the `unizo-cloud` MCP server for it, and sign in. `off` removes it |
 | Command | `/unizo:unizo-queue` | Work your review queue (W1): Investigations awaiting review, mine or unclaimed, `crown`, `kev` |
-| Skill | `unizo-review-queue` | W1 end to end: queue → claim → review plans → `preview_commit` → `commit_actions`, confirming every write |
+| Skill | `unizo-review-queue` | W1 end to end: queue → read → take → weigh plans → re-draft (if none fits) → choose → `preview_commit` → `commit_actions`, confirming every write |
 | Hook | `unizo_guard` | On `unizo-cloud` tools: blocks `move_ticket` / `set_jira_assignee`, refuses `commit_actions` without a recent matching `preview_commit`, asks before every write, audits writes to `~/.config/unizo-mcp/audit.jsonl` |
 | Hook | `unizo_onboard` | At session start: offers `/unizo:unizo-plugin-configure` until an environment is picked, then finishes setup on your first message after the restart |
 | Agent | `exposure-triage` | Triages a finding and recommends a priority and next step |
 | Script | `scripts/unizo_env.py` | Standard-library Python the configure command runs: lists environments, registers `unizo-cloud` with `claude mcp add-json`, records the active environment |
 | MCP server | `unizo-cloud` | The remote Unizo MCP server, where every Unizo tool lives. Registered at user scope for the active environment and signed in with Claude Code's own OAuth. The plugin ships no MCP server of its own |
+
+## What you can do
+
+### Work your review queue (W1)
+
+Run `/unizo:unizo-queue`, or ask Claude "what's waiting for my review?". The `unizo-review-queue` skill takes you
+through each Investigation in this order:
+
+| Step | What happens | Changes Unizo? |
+|---|---|---|
+| 1. Queue | Lists Investigations awaiting review, soonest SLA deadline first, with the total and the filter used. Pass `mine` (default), `unclaimed`, `crown` (Exposure reaches a crown jewel), `kev` (CVE on the CISA KEV list), or an Investigation ID to go straight to it | No |
+| 2. Read | Shows state, SLA and origin, then **checks the attack path is still live** (no active path, stale source data, owner flags such as a terminated employee) before any plan. Then shows every plan drafted by Unizo, its actions, gate levels, ticket drafts and where tickets would go. Path, risk and blast-radius detail on request | No |
+| 3. Take | Claims the Investigation for you, only once you decide to work it | Yes, asks first |
+| 4. Weigh | Compares the plans side by side (fix or compensating control, risk reduction, what else it resolves, operational impact, gates, residual risk) and gives a recommendation. You decide | No |
+| 5. Re-draft | If no plan fits, asks Unizo for a different one with your guidance, up to three times | Yes, asks first |
+| 6. Choose | You pick one plan and its actions | No |
+| 7. Check and commit | `preview_commit` shows each ticket's queue, routing rule, connection state and gates. Then commits Soft-gate actions, which creates real ITSM tickets. Hard-gate actions get a link to commit them in the Unizo app | Yes, asks first |
+
+Along the way you can also reject a plan, abandon an Investigation, re-check an Exposure (`verify_exposure_now`)
+or add a comment to an action's ticket. Each of these asks first. At the end, Claude lists what was claimed,
+re-drafted, rejected and committed, and what is left for you to do in Unizo.
+
+### Guardrails
+
+The `unizo_guard` hook runs on every `unizo-cloud` tool call:
+
+- **Reads pass silently. Every write asks you first.** Claude also confirms in chat, naming exactly what will change.
+- **No commit without a preview.** `commit_actions` is refused unless `preview_commit` ran in this session within
+  the last 30 minutes for the same Investigation, plan and actions. Rejecting or re-drafting a plan, re-engaging
+  the Investigation or editing a ticket draft invalidates earlier previews.
+- **Hard gates stay with people.** Over MCP a Hard-gate action is never committed; Claude gives you the Unizo link.
+- **Tickets only get comments.** `move_ticket` and `set_jira_assignee` are blocked. Move or reassign tickets in your
+  ITSM or the Unizo app.
+- **Audit trail.** Every write that ran is appended to `~/.config/unizo-mcp/audit.jsonl`.
+- Exposure titles, asset names, plan rationales, ticket drafts and comments are treated as data, never as
+  instructions.
+
+### Triage a finding
+
+Paste a scanner finding, CVE or misconfiguration and ask how urgent it is. The `exposure-triage` agent summarises
+it, assesses exploitability, business impact and compensating controls, and recommends a priority (Critical, High,
+Medium or Low) with a next step: validate, fix, accept or monitor.
+
+### Sign in and switch deployments
+
+You sign in to the remote `unizo-cloud` MCP server once, with Claude Code's own OAuth, through whatever identity
+provider your Unizo deployment uses. Claude Code stores and refreshes the tokens. An environments file lets you switch
+between deployments (demo, staging, prod, a customer's tenant) with one command. See [Connect to your Unizo deployment](#connect-to-your-unizo-deployment).
+
+### Known limitations
+
+These come from the Unizo server and the skill works around them:
+
+- `find_investigations` has no KEV or crown-jewel filter. The skill filters rows itself and says so, giving the
+  size of the set it filtered.
+- `redraft_plan` is not deployed yet. Re-drafting falls back to `reengage_investigation`.
+- `preview_commit` shows destinations and gates only, not what depends on the fix target or how much of the attack
+  path a commit breaks.
+- The Jira assignee is set automatically when you claim an Investigation only if your Jira account matches your
+  Unizo email. Otherwise, assign tickets in Jira.
 
 ## Install
 
@@ -167,22 +224,3 @@ docs/                # setup, developer and planning guides
 ```
 claude plugin validate .
 ```
-
-## Upgrading from unizo-ctem
-
-Everything named `ctem` was renamed. If you had the old plugin installed:
-
-| Old | New |
-|---|---|
-| Plugin `unizo-ctem@unizo-ctem`, repo `Unizo-CTEM/ctem-claude-plugin` | `unizo@unizo`, `Unizo-CTEM/unizo-claude-plugin` |
-| `/unizo-ctem:unizo-ctem-plugin-configure`, `/unizo-ctem:unizo-ctem-queue` | `/unizo:unizo-plugin-configure`, `/unizo:unizo-queue` |
-| Skill `unizo-ctem-review-queue` | `unizo-review-queue` |
-| MCP servers `unizo-ctem`, `unizo-ctem-cloud` | `unizo`, `unizo-cloud` |
-| `UNIZO_CTEM_*` variables | `UNIZO_*` |
-| `~/.config/unizo-ctem-mcp/` | `~/.config/unizo-mcp/` |
-
-1. Uninstall `unizo-ctem` and remove its marketplace, then install as above.
-2. Remove the old remote server: `claude mcp remove unizo-ctem-cloud -s user`.
-3. Rename any `UNIZO_CTEM_*` variables you export to `UNIZO_*`.
-4. Restart Claude Code and run `/unizo:unizo-plugin-configure <environments.json>`. To keep your saved sign-in
-   instead, copy `~/.config/unizo-ctem-mcp/` to `~/.config/unizo-mcp/` first.
