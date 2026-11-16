@@ -7,8 +7,11 @@ description: Work the user's Unizo review queue (workflow W1) - list Investigati
 
 The user wants to work through Investigations that are waiting for review: the Hub's "plans for your review".
 The flow is **queue → read → take → weigh → (re-draft) → choose → check and commit**. All calls go to the
-**`unizo-cloud`** MCP server (`mcp__unizo-cloud__*`), which `/unizo:unizo-plugin-configure` registers and the user
-signs in to through `/mcp`.
+connected Unizo MCP server. Its tool prefix depends on how it was connected: `mcp__unizo-cloud__*` when
+`/unizo:unizo-plugin-configure` registered it, or `mcp__Unizo__*` (or similar) when it is a claude.ai connector.
+Use whichever one is present; tool names below are given without the prefix. The tools may be deferred: if so,
+load them with ToolSearch (for example `+unizo get_my_context`) before the first call. Never call a tool name
+you haven't seen listed or loaded.
 
 | Step | Tool | Notes |
 |---|---|---|
@@ -45,10 +48,14 @@ signs in to through `/mcp`.
 ## Steps
 
 ### 0. Orient
-Call `get_my_context`. Note the user's `user.id` (needed for "mine"), check that the W1 tools are in
+First find the Unizo server's tools (see the prefixes above; search with ToolSearch if they are deferred). Only if
+no Unizo server's tools can be found at all, or the only ones present are `authenticate`/`complete_authentication`,
+tell the user to run `/unizo:unizo-plugin-configure` (or authenticate the server from `/mcp`). Don't send them
+there when a Unizo connector is already working.
+
+Then call `get_my_context`. Note the user's `user.id` (needed for "mine"), check that the W1 tools are in
 `tools.available` (note whether `redraft_plan` is there; see step 5), and stop with the refusal reason if any
-are in `tools.refused`. If `unizo-cloud` is missing or unauthenticated, tell the user to run
-`/unizo:unizo-plugin-configure <environments.json> <env>` and authenticate it from `/mcp`.
+are in `tools.refused`.
 
 ### 1. The queue
 Pick the recipe from what the user asked (default: mine first, then unclaimed). Order by
