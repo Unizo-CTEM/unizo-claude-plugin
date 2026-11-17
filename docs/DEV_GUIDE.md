@@ -12,11 +12,11 @@ unizo-cloud   →  https://<env>/mcp   (direct, OAuth)   [registered by /unizo:u
 
 - **`unizo-cloud`** is the remote Unizo MCP server, where the Unizo tools are.
   `/unizo:unizo-plugin-configure <environments.json> <name>` adds it to your Claude Code **user** config
-  by running `scripts/unizo_env.py`, which calls `claude mcp add-json`. After that, Claude Code
+  with `claude mcp add-json` (Claude runs it; the plugin ships no scripts). After that, Claude Code
   connects to it directly and signs in with its own OAuth. It stays registered even if the plugin is turned off, until
   `/unizo:unizo-plugin-configure off` or `claude mcp remove unizo-cloud -s user`.
-- The plugin has **no local MCP server and no hooks**. Its only code is `scripts/unizo_env.py`, standard-library
-  Python run with `python3` when the configure command runs it.
+- The plugin has **no local MCP server, no hooks and no scripts**: it's Markdown and JSON only. The configure
+  command tells Claude which `claude mcp` commands to run and how to keep the state file.
 - A claude.ai connector for the same backend (for example **Unizo DEV52**) is a separate server that has
   nothing to do with the plugin. Turn it off while testing so you know which tools you're calling.
 
@@ -27,10 +27,8 @@ Environments come only from the file you pass (the plugin ships none and reads n
 ## Step 0: Prerequisites
 
 ```bash
-python3 --version       # 3.8 or later
 cd ~/projects/Unizo-CTEM/unizo-claude-plugin
-python3 -m json.tool ~/unizo-envs.json >/dev/null && echo "unizo-envs.json OK"
-python3 -m pytest tests -q                 # environment-script tests (needs pytest)
+jq empty ~/unizo-envs.json && echo "unizo-envs.json OK"   # any JSON checker works
 claude plugin validate .
 ```
 
@@ -40,8 +38,8 @@ Close Claude Code, then run in a terminal:
 
 ```bash
 cd ~/projects/Unizo-CTEM/unizo-claude-plugin
-python3 scripts/unizo_env.py off                     # removes unizo-cloud and the active environment
-claude mcp remove unizo-cloud -s user 2>/dev/null    # in case it's still there
+claude mcp logout unizo-cloud 2>/dev/null           # sign out of unizo-cloud
+claude mcp remove unizo-cloud -s user 2>/dev/null    # remove the registration
 claude plugin uninstall unizo@unizo
 claude plugin marketplace remove unizo
 rm -rf ~/.config/unizo-mcp                           # remaining state (active environment)
@@ -114,26 +112,24 @@ To check what happens for someone upgrading from a version with the local `unizo
 
 1. With an environment active, edit `~/.config/unizo-mcp/active-environment.json` and add
    `"headersHelper": "old-unizo-helper headers"` to its `remote` object.
-2. `python3 scripts/unizo_env.py current` prints `OUTDATED`.
-3. Run `/unizo:unizo-plugin-configure`. Claude says the environment was set up by an older version and registers it
+2. Run `/unizo:unizo-plugin-configure`. Claude says the environment was set up by an older version and registers it
    again. `claude mcp get unizo-cloud` no longer shows a `headersHelper`.
 
 ## Useful commands
 
 ```bash
-# Environment switcher from a terminal (what /unizo:unizo-plugin-configure runs)
-python3 scripts/unizo_env.py [list --file <path> | current | use <name> --file <path> [--force] | off]
-
-# Inspect or recreate the remote server registration
+# Inspect, remove or register the remote server by hand (what /unizo:unizo-plugin-configure runs)
 claude mcp get unizo-cloud
-claude mcp remove unizo-cloud -s user && python3 scripts/unizo_env.py use <name> --file ~/unizo-envs.json --force
+claude mcp remove unizo-cloud -s user
+claude mcp add-json --scope user unizo-cloud '{"type":"http","url":"<url>","oauth":{"clientId":"<client_id>"}}'
+cat ~/.config/unizo-mcp/active-environment.json      # the active environment
 ```
 
 ## Troubleshooting
 
 | Symptom | Check |
 |---|---|
-| `env` says `not valid JSON` | `python3 -m json.tool ~/unizo-envs.json`. A missing comma between environments is the usual cause. |
-| `unizo-cloud` missing after `use` | `claude mcp get unizo-cloud`, then rerun `use <name>`. Use `--force` only if you added `unizo-cloud` by hand. |
+| Claude says the file isn't valid JSON | `jq empty ~/unizo-envs.json`. A missing comma between environments is the usual cause. |
+| `unizo-cloud` missing after switching | `claude mcp get unizo-cloud`, then run `/unizo:unizo-plugin-configure ~/unizo-envs.json <name>` again. |
 | `SEP-2352: stored OAuth credential has no 'issuer' stamp` | An old `unizo-cloud` token is still stored. It doesn't block anything. If sign-in acts strangely, use `/mcp` → `unizo-cloud` → **Clear authentication** and sign in again. |
-| Tools still show the old environment | You didn't restart Claude Code after `use`. |
+| Tools still show the old environment | You didn't restart Claude Code after switching. |

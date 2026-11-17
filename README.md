@@ -1,8 +1,8 @@
 # unizo-claude-plugin
 
 A Claude Code plugin for Unizo: work your exposure review queue, connect to your Unizo deployment's MCP server, and
-switch between deployments, all from Claude Code. It needs only `python3` and the `claude` CLI: there is no local MCP
-server and nothing to install with `uv`, `pip` or `npm`.
+switch between deployments, all from Claude Code. It needs only the `claude` CLI: the plugin ships no scripts, no local
+MCP server, and nothing to install.
 
 **Full guide:** [docs/SETUP_AND_TESTING.md](docs/SETUP_AND_TESTING.md) covers installing, configuring for your
 GCP/AWS deployment and identity provider, administrator setup, manual and Claude-driven testing, and troubleshooting.
@@ -18,7 +18,6 @@ and switching between environments.
 | Command | `/unizo:unizo-queue` | Work your review queue (W1): Investigations awaiting review, mine or unclaimed, `crown`, `kev` |
 | Skill | `unizo-review-queue` | W1 end to end: queue → read → take → weigh plans → re-draft (if none fits) → choose → `preview_commit` → `commit_actions`, confirming every write |
 | Agent | `exposure-triage` | Triages a finding and recommends a priority and next step |
-| Script | `scripts/unizo_env.py` | Standard-library Python the configure command runs: lists environments, registers `unizo-cloud` with `claude mcp add-json`, records the active environment |
 | MCP server | `unizo-cloud` | The remote Unizo MCP server, where every Unizo tool lives. Registered at user scope for the active environment and signed in with Claude Code's own OAuth. The plugin ships no MCP server of its own |
 
 ## What you can do
@@ -93,8 +92,7 @@ This repo is both a plugin and a single-plugin marketplace.
 /plugin install unizo@unizo
 ```
 
-**Prerequisites:** `python3` (3.8 or later; the environment script uses only the standard library) and the `claude`
-CLI on your `PATH`.
+**Prerequisites:** the `claude` CLI on your `PATH`.
 
 ## Connect to your Unizo deployment
 
@@ -177,7 +175,8 @@ How it works:
   registered, and run the configure command again.
 - The active environment is kept in `~/.config/unizo-mcp/active-environment.json`. Restart Claude Code after switching.
 
-From a terminal: `python3 <plugin-dir>/scripts/unizo_env.py [list --file <path> | current | use <name> --file <path> [--force] | off]`.
+From a terminal, the same registration by hand: `claude mcp add-json --scope user unizo-cloud '{"type":"http","url":"<url>","oauth":{"clientId":"<client_id>"}}'`,
+and `claude mcp remove --scope user unizo-cloud` to undo it.
 
 ### Upgrading from a version with the local `unizo` server
 
@@ -203,7 +202,6 @@ The server must be reachable over HTTPS from users' machines (VPN, allow-listing
 
 ```
 claude --plugin-dir .          # load the plugin from this checkout
-python3 -m pytest tests        # environment-script tests (needs pytest)
 ```
 
 To test the install flow, install from a local marketplace:
@@ -218,8 +216,6 @@ To test the install flow, install from a local marketplace:
 commands/            # slash commands
 skills/              # skills (one folder per skill, with SKILL.md)
 agents/              # subagents
-scripts/             # unizo_env.py: environments and the unizo-cloud registration
-tests/               # pytest tests for the script
 docs/                # setup, developer and planning guides
 ```
 

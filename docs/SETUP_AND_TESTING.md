@@ -25,8 +25,8 @@ Claude Code
 - **`unizo-cloud`** is the remote Unizo MCP server, where every Unizo tool lives. The configure command registers it
   in your Claude Code user config, and Claude Code signs you in to it with its own OAuth. Calls go straight from
   Claude Code to the server.
-- The plugin ships **no MCP server and no hooks**, and installs nothing. Its only code is the environment script
-  (`scripts/unizo_env.py`), standard-library Python that the configure command runs with `python3`.
+- The plugin ships **no MCP server, no hooks and no scripts**, and installs nothing: it's Markdown and JSON only.
+  The configure command has Claude run the `claude mcp` commands that register `unizo-cloud`.
 - **Environments** ([2.2](#22-environments-switching-between-deployments)) name the remote server URL and OAuth client ID
   per deployment, so you can switch with one command.
 - **Commands:** `/unizo:unizo-plugin-configure` (pick or switch an environment, sign in, check the connection) and
@@ -42,7 +42,6 @@ Claude Code
 | Requirement | Check |
 |---|---|
 | Claude Code | `claude --version` |
-| `python3` 3.8 or later, on the `PATH` Claude Code sees | `python3 --version` |
 | HTTPS access to your Unizo MCP server | Open the MCP URL from your environments file in a browser: an error such as `401` means it's reachable |
 
 ### Install from the marketplace
@@ -93,7 +92,8 @@ You can also sign in yourself: `/mcp` → `unizo-cloud` → **Authenticate**.
 /unizo:unizo-plugin-configure off                        # remove unizo-cloud, then restart
 ```
 
-From a terminal: `python3 <plugin-dir>/scripts/unizo_env.py [list --file <path> | current | use <name> --file <path> [--force] | off]`.
+From a terminal, the same registration by hand: `claude mcp add-json --scope user unizo-cloud '{"type":"http","url":"<url>","oauth":{"clientId":"<client_id>"}}'`,
+and `claude mcp remove --scope user unizo-cloud` to undo it.
 
 The file format:
 
@@ -128,11 +128,11 @@ Keys from earlier plugin versions (`api_url`, `sso_*`, `use_env_secrets`) are ac
 (`api_token`, `sso_client_secret`) are refused.
 
 How switching works:
-- `use` registers `unizo-cloud` at user scope with `claude mcp add-json`. The plugin can't ship it in a `.mcp.json`:
+- Switching registers `unizo-cloud` at user scope with `claude mcp add-json`. The plugin can't ship it in a `.mcp.json`:
   Claude Code reads a remote server's `oauth.clientId` literally and doesn't substitute environment-variable references there.
-- When the URL or client ID changes, `use` signs the old server out (`claude mcp logout unizo-cloud`), because Claude
+- When the URL or client ID changes, switching signs the old server out (`claude mcp logout unizo-cloud`), because Claude
   Code would otherwise reuse the cached OAuth client. You sign in again after the restart.
-- `use` won't replace a `unizo-cloud` server it didn't add unless you pass `--force`; the configure command asks first.
+- The configure command won't replace a `unizo-cloud` server it didn't add without asking you first.
 - The active environment is recorded in `~/.config/unizo-mcp/active-environment.json` (or under
   `$XDG_CONFIG_HOME`), with the file it came from.
 
@@ -150,7 +150,7 @@ version, `unizo-cloud` won't connect, and `/unizo:unizo-plugin-configure` (no ar
 1. `claude mcp get unizo-cloud` shows `Scope: User config`, the environment's URL, and its OAuth client ID.
 2. In Claude Code, `/mcp` shows `unizo-cloud` as connected (or **Needs authentication** before you sign in).
 3. Ask Claude: *"Call unizo-cloud get_my_context"*. It returns your user and tenant.
-4. `python3 <plugin-dir>/scripts/unizo_env.py current` shows the environment and `setup complete: True`.
+4. `~/.config/unizo-mcp/active-environment.json` names the environment, the file it came from, and the server config.
 
 ---
 
@@ -197,16 +197,10 @@ Then they run `/unizo:unizo-plugin-configure <path-to-the-file> acme`, restart C
 
 All commands run from the repository root.
 
-### 5.1 Automated tests
+### 5.1 Validate
 
-```bash
-python3 -m pytest tests -q        # needs pytest
-```
-
-They cover `scripts/unizo_env.py`: file parsing, registering and replacing `unizo-cloud` with a fake `claude` CLI,
-sign-out on a client change, `off`, spotting registrations from older versions, and the CLI. No network or Claude account is needed.
-
-Also run `claude plugin validate .`.
+Run `claude plugin validate .`. The plugin has no code of its own, so there are no unit tests; the configure flow is
+covered by the interactive tests below.
 
 ### 5.2 Interactive test in Claude Code
 
@@ -237,7 +231,8 @@ Do this once per customer environment, with a real user account.
 ### 5.4 Clean up after testing
 
 ```bash
-python3 scripts/unizo_env.py off       # removes unizo-cloud and the active environment
+claude mcp logout unizo-cloud          # sign out of unizo-cloud
+claude mcp remove unizo-cloud -s user  # remove the registration
 claude plugin uninstall unizo@unizo
 claude plugin marketplace remove unizo
 rm -rf ~/.config/unizo-mcp             # remaining state: the active environment
@@ -252,13 +247,13 @@ For lower-level logs, start Claude Code with `claude --debug=mcp`.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | No `unizo-cloud` in `/mcp` | No environment active, or Claude Code wasn't restarted | `/unizo:unizo-plugin-configure <environments.json> <name>`, then restart. |
-| `unizo-cloud` fails right after upgrading the plugin | It was registered by an older version, whose `headersHelper` ran the removed local server | `/unizo:unizo-plugin-configure <environments.json> <name>` again, restart, sign in. `unizo_env.py current` prints `OUTDATED` in this case. |
+| `unizo-cloud` fails right after upgrading the plugin | It was registered by an older version, whose `headersHelper` ran the removed local server | `/unizo:unizo-plugin-configure <environments.json> <name>` again, restart, sign in. Running the configure command with no arguments spots this and says so. |
 | `unizo-cloud` "Needs authentication" | Not signed in yet | `/mcp` → `unizo-cloud` → Authenticate, or let `/unizo:unizo-plugin-configure` do it. |
 | "Got new credentials, but ... unizo-cloud rejected them on reconnect" | Sign-in worked, but the server refuses the token (`401 invalid_token`), usually its audience | Fix on the server side: see [4.1](#41-remote-mcp-server-remote_mcp-in-an-environment). Re-authenticating won't help. |
 | `unizo-cloud` keeps an old client ID | Cached OAuth client registration | `claude mcp logout unizo-cloud`, then Authenticate again. Switching environments does this when the client ID changes. |
 | Authenticate fails: "client registration" / "Trusted Hosts" / 403 | Keycloak won't let Claude Code register a client | Ask the administrator to allow anonymous client registration, or register a client and set `remote_mcp.client_id`. |
 | Browser shows "redirect_uri mismatch" | Redirect URI not registered for the client | Register `http://localhost:<port>/callback`, and pin the port with `remote_mcp.callback_port`. |
-| `use` says `unizo-cloud` "already exists and wasn't added by this command" | You added a `unizo-cloud` server by hand | Remove it (`claude mcp remove --scope user unizo-cloud`) or let the configure command re-run with `--force`. |
-| `env` says `not valid JSON` | Syntax error in the environments file | `python3 -m json.tool <file>`. A missing comma between environments is the usual cause. |
+| Configure says `unizo-cloud` already exists and wasn't added by it | You added a `unizo-cloud` server by hand | Remove it (`claude mcp remove --scope user unizo-cloud`) or say yes when the configure command asks to replace it. |
+| Configure says the file isn't valid JSON | Syntax error in the environments file | `jq empty <file>`, or any JSON checker. A missing comma between environments is the usual cause. |
 | HTTP 403 from Unizo tools | Signed in, but your account lacks Unizo permissions | Ask your Unizo administrator. |
 | Tools still show the old environment | Claude Code wasn't restarted after switching | Restart Claude Code. |
