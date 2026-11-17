@@ -14,20 +14,68 @@ Arguments: `$ARGUMENTS`: the path to the user's environments file, optionally fo
 to switch to; or `off`. There is no default environments file: never fall back to one, always use the file the user
 names.
 
-Below, `env` is short for `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/unizo_env.py`, run with the Bash tool. It needs only
-`python3` and the `claude` CLI. The plugin pre-approves nothing, so Claude Code asks the user to approve each run: before
-the first one, say in one line that a few approval prompts follow and that each runs the plugin's environment script.
+You do this yourself: read files with the Read tool, write the state file with the Write tool, and run only the
+`claude mcp` commands named below with the Bash tool. The plugin ships no scripts and pre-approves nothing, so Claude
+Code asks the user to approve each `claude mcp` command: before the first one, say in one line that a few approval
+prompts follow and that each one registers, removes, or checks the `unizo-cloud` server.
 
 Never ask the user to paste tokens or secrets into the chat.
 
+## The pieces
+
+**State file.** `$XDG_CONFIG_HOME/unizo-mcp/active-environment.json`, or `~/.config/unizo-mcp/active-environment.json`
+when `XDG_CONFIG_HOME` is unset. It records the active environment:
+
+```json
+{
+  "name": "staging",
+  "source": "/Users/me/unizo-envs.json",
+  "remote": { "type": "http", "url": "https://unizo-staging.acme.com/mcp", "oauth": { "clientId": "unizo-mcp-staging" } },
+  "remote_registered": true,
+  "activated_at": "2026-11-17T09:30:00+00:00"
+}
+```
+
+`source` is the environments file's absolute path. `remote` is exactly the JSON passed to `claude mcp add-json`.
+`remote_registered: true` means this command added `unizo-cloud`. If the file is missing, or isn't JSON with a string
+`name`, no environment is active. If `remote` has a `headersHelper` key, the server was registered by plugin 0.1.x
+and can't connect: treat it as **outdated**.
+
+**Environments file.** A JSON object with an `"environments"` object. Check each environment you use and stop with a
+clear message (naming the file and the environment) if any rule fails:
+
+- The name uses only letters, digits, `-`, `_` and `.`.
+- The value is an object. It must not contain `api_token` or `sso_client_secret`: secrets don't belong in this file.
+- Known keys: `description` (a string) and `remote_mcp`. The older keys `api_url`, `sso_issuer`, `sso_client_id`,
+  `sso_scopes`, `sso_audience`, `sso_token_type`, `sso_redirect_port`, `use_env_secrets` and `use_plugin_secrets` are
+  accepted and ignored. Any other key is an error.
+- `remote_mcp` is an object with only `url` (required), `client_id`, `callback_port` and `scopes`. `url` starts with
+  `https://` (`http://` only for `localhost` or `127.0.0.1`). `client_id` and `scopes` are strings. `callback_port`
+  is a whole number from 1 to 65535.
+
+The server config for an environment is `{"type": "http", "url": <url>}`, plus an `"oauth"` object holding
+`clientId`, `callbackPort` and `scopes` for whichever of `client_id`, `callback_port`, `scopes` are set (leave
+`"oauth"` out when none are).
+
+**Server commands** (Bash; quote the JSON in single quotes):
+
+- Exists? `claude mcp get unizo-cloud`: it exists at user scope when it exits 0 and the output has `Scope: User`.
+- Sign out: `claude mcp logout unizo-cloud`
+- Remove: `claude mcp remove --scope user unizo-cloud`
+- Add: `claude mcp add-json --scope user unizo-cloud '<server config JSON>'`
+
+If `claude` isn't found, say the Claude Code CLI must be on the `PATH` and stop.
+
 ## 0. Where are we?
 
-- `$ARGUMENTS` is `off`: run `env off`, show its output, tell the user to restart Claude Code, and stop.
+- `$ARGUMENTS` is `off`: if no environment is active, say so and stop. Otherwise, if `remote_registered` is true and
+  `unizo-cloud` exists, sign it out and remove it. Delete the state file (`rm` on that one path, after showing it),
+  say which environment was deactivated, tell the user to restart Claude Code, and stop.
 - `$ARGUMENTS` names a file (maybe with an environment name): the user wants to pick or switch. Go to step 1.
-- Otherwise run `env current`:
+- Otherwise read the state file:
   - No environment is active: go to step 1.
-  - It prints `OUTDATED`: the environment was registered by an older plugin version and `unizo-cloud` can't connect.
-    Say so in one line, then go to step 1, sub-step 3, with the file and name `env current` printed.
+  - It's outdated: say in one line that it was registered by an older plugin version and `unizo-cloud` can't
+    connect, then go to step 1, sub-step 3, with the state's `source` and `name`.
   - An environment is active: go to step 2.
 
 ## 1. Environment (first session)
@@ -38,30 +86,38 @@ Never ask the user to paste tokens or secrets into the chat.
    - Otherwise ask the user for the path in a short message, and end your turn until they reply: *"Which Unizo
      environments file should I use? Send its path (for example ~/Downloads/environments.json), or run
      `/unizo:unizo-plugin-configure <path>`."* Don't guess a path, and don't look for one on disk.
-2. List the environments with `env list --file <path>`. Ask the user which one to use with AskUserQuestion: one
-   option per environment (name as the label, remote MCP URL and description as the description; up to 4 options,
-   the user can type any other name). If the file holds a single environment, still confirm before switching.
-3. Switch with `env use <name> --file <path>`. This registers the remote server `unizo-cloud` at user scope.
-   Report the remote MCP URL and client ID now in effect. Switching signs `unizo-cloud` out whenever its URL or
-   client ID changes; that's expected. On an error, show it verbatim and:
-   - The file is missing or invalid, or the name is unknown: explain the file format with this example and offer to
-     create a file where the user chooses, then stop.
+2. Read the file and list its environments (name, `remote_mcp.url` or "(no remote_mcp)", description; mark the active
+   one if the state's `source` is this file). Ask the user which one to use with AskUserQuestion: one option per
+   environment (name as the label, remote MCP URL and description as the description; up to 4 options, the user can
+   type any other name). If the file holds a single environment, still confirm before switching.
+3. Switch to `<name>`:
+   1. Read and check the file (rules above). The name must be in it and have a `remote_mcp.url`.
+   2. Check whether `unizo-cloud` exists. If it does and the state doesn't say `remote_registered: true`, this command
+      didn't add it: ask the user before replacing it. Stop if they say no.
+   3. If it exists: when the state's `remote` differs from the new server config, sign it out first (Claude Code keeps
+      a server's OAuth client and tokens by name, and a cached client wins over a changed client ID). Then remove it.
+   4. Add it with the new server config.
+   5. Write the state file (create the folder if needed) with the name, the file's absolute path, the server config,
+      `remote_registered: true`, and the current UTC time.
 
-     ```json
-     {
-       "environments": {
-         "staging": {
-           "description": "Acme staging",
-           "remote_mcp": { "url": "https://unizo-staging.acme.com/mcp", "client_id": "unizo-mcp-staging" }
-         }
+   Report the remote MCP URL and the client ID now in effect ("dynamic client registration" if none). Switching signs
+   `unizo-cloud` out whenever its URL or client ID changes; that's expected. If a `claude mcp` command fails, show its
+   output verbatim and stop. If the file is missing or invalid, or the name is unknown, explain the format with this
+   example and offer to create a file where the user chooses, then stop.
+
+   ```json
+   {
+     "environments": {
+       "staging": {
+         "description": "Acme staging",
+         "remote_mcp": { "url": "https://unizo-staging.acme.com/mcp", "client_id": "unizo-mcp-staging" }
        }
      }
-     ```
+   }
+   ```
 
-     `client_id` is optional (leave it out for dynamic client registration); `callback_port` and `scopes` are also
-     optional. Never put tokens or client secrets in an environments file.
-   - `unizo-cloud` already exists and this command didn't add it: ask the user before re-running with `--force`.
-   - Anything else: stop.
+   `client_id` is optional (leave it out for dynamic client registration); `callback_port` and `scopes` are also
+   optional. Never put tokens or client secrets in an environments file.
 4. Tell the user, and stop here:
 
    > Environment **<name>** is set. Restart Claude Code to load it: quit, then run `claude` again (or
@@ -72,8 +128,8 @@ Never ask the user to paste tokens or secrets into the chat.
 
 Say one short line first ("Step 2 of 2: signing in to unizo-cloud").
 
-If the environment `env current` reports isn't the one just picked (the user hasn't restarted yet), ask them to
-restart Claude Code and stop. Then look at the tools you have from `unizo-cloud`:
+If the active environment isn't the one just picked (the user hasn't restarted yet), ask them to restart Claude Code
+and stop. Then look at the tools you have from `unizo-cloud`:
 
 - **Unizo tools are available** (for example `mcp__unizo-cloud__get_my_context`): call `get_my_context` and go to
   step 3.

@@ -12,7 +12,7 @@
 
 | Part | State |
 |---|---|
-| Local `unizo` MCP server | Removed. Environments are handled by `scripts/unizo_env.py` (standard-library Python), and `unizo-cloud` signs in with Claude Code's own OAuth. |
+| Local `unizo` MCP server | Removed. Environments are handled by the configure command, which has Claude run `claude mcp add-json`, and `unizo-cloud` signs in with Claude Code's own OAuth. |
 | Remote `unizo-cloud` MCP server | 99 tools. All Unizo work goes through it. A test call works (W1 queue: 7,906 Investigations awaiting review). |
 | Commands | `/unizo:unizo-setup`, `/unizo:unizo-env`, `/unizo:unizo-hello` |
 | Skills | `unizo-basics` (general Unizo concepts) |
